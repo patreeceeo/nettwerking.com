@@ -37,12 +37,14 @@ jobs:
 
       - name: Create deployment archive
         run: |
+          archive_path="/tmp/${GITHUB_SHA}.tar.gz"
           tar \
             --exclude=.git \
             --exclude=.github \
             --exclude=.cpcache \
             --exclude=.shadow-cljs \
-            -czf deploy.tar.gz .
+            -czf "$archive_path" .
+          printf 'ARCHIVE_PATH=%s\n' "$archive_path" >> "$GITHUB_ENV"
 
       - name: Configure SSH
         run: |
@@ -57,7 +59,7 @@ jobs:
             set -eu
             mkdir -p '$DEPLOY_PATH/releases' '$DEPLOY_PATH/shared'
           "
-          scp -i ~/.ssh/deploy_key deploy.tar.gz \
+          scp -i ~/.ssh/deploy_key "$ARCHIVE_PATH" \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/releases/${GITHUB_SHA}.tar.gz"
 
       - name: Activate release
