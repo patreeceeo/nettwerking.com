@@ -4,4 +4,5 @@
 /classes
 /target
 *.jar
-/resources
+/resources/public/*
+!/resources/public/index.html
