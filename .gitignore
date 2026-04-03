@@ -6,3 +6,6 @@
 *.jar
 /resources/public/*
 !/resources/public/index.html
+
+# Produced by nix build
+result

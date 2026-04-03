@@ -7,7 +7,8 @@
             [ring.util.response :as response]))
 
 (defn index-handler [_request]
-  (or (response/resource-response "public/index.html")
+  (or (some-> (response/resource-response "public/index.html")
+              (response/content-type "text/html; charset=utf-8"))
       {:status 404
        :headers {"content-type" "text/plain; charset=utf-8"}
        :body "Missing resources/public/index.html"}))

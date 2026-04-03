@@ -11,6 +11,7 @@ help:
 		"  make lint            Run clj-kondo" \
 		"  make fmt             Format source files" \
 		"  make fmt-check       Check formatting without changing files"
+		"  make update-lockfile Run this after updating deps.edn"
 
 run:
 	clojure -M:run
@@ -35,3 +36,9 @@ fmt:
 
 fmt-check:
 	clojure -M:fmt-check
+
+install: frontend-build
+
+update-lockfile:
+	nix run github:jlesquembre/clj-nix#deps-lock
+
