@@ -13,7 +13,6 @@
       buildDeps = [
         pkgs.jdk25
         pkgs.clojure
-        pkgs.gnumake
       ];
     in {
       packages.${system} = rec {
@@ -42,7 +41,9 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = buildDeps ++ [];
+        buildInputs = buildDeps ++ [
+          pkgs.gnumake
+        ];
         shellHook = ''
           echo "Developing fullstack_clojure"
         '';
