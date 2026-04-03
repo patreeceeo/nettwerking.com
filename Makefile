@@ -37,8 +37,6 @@ fmt:
 fmt-check:
 	clojure -M:fmt-check
 
-install: frontend-build
-
 update-lockfile:
 	nix run github:jlesquembre/clj-nix#deps-lock
 
