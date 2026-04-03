@@ -6,7 +6,7 @@
     clj-nix.url = "github:jlesquembre/clj-nix";
   };
 
-  outputs = { nixpkgs, clj-nix, ... }:
+  outputs = { self, nixpkgs, clj-nix, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
