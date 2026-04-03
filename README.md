@@ -19,6 +19,8 @@ The project favors a small dependency set and a simple local workflow.
 
 No Node.js or npm setup is required for the current frontend scaffold.
 
+Note: There's a lockfile that needs to be updated after adding dependencies. See Makefile.
+
 ## Commands
 
 Use `make help` to list the available targets.
