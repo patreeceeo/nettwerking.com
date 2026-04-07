@@ -10,7 +10,7 @@ help:
 		"  make test            Run tests" \
 		"  make lint            Run clj-kondo" \
 		"  make fmt             Format source files" \
-		"  make fmt-check       Check formatting without changing files"
+		"  make fmt-check       Check formatting without changing files" \
 		"  make update-lockfile Run this after updating deps.edn"
 
 run:
@@ -39,4 +39,3 @@ fmt-check:
 
 update-lockfile:
 	nix run github:jlesquembre/clj-nix#deps-lock
-
