@@ -1,6 +1,13 @@
-# Clojure + ClojureScript Web App
+# Live Core Editor
 
-Minimal full-stack scaffold with:
+This project aims to make programming feel less like editing source files and
+more like shaping live programmable material.
+
+The first wedge is a browser-native Lisp environment with a structural editor:
+users build expressions as editable trees, see immediate feedback as they
+change them, and never have to drop into raw text syntax just to try an idea.
+
+Today the codebase is still a small Clojure + ClojureScript scaffold, with:
 
 - Clojure backend
 - ClojureScript frontend
@@ -55,13 +62,20 @@ The frontend tooling is configured around a modern JVM. A Java 25 environment is
 
 The frontend build is named `app` and writes assets to `resources/public/js`.
 
+At the moment, the browser UI is still the starter scaffold. The editor MVP is
+planned and documented, but not implemented yet.
+
 ## Layout
 
 ```text
 .
 ├── AGENTS.md
+├── DESIGN.md
+├── ENG_REVIEW.md
+├── EVALUATOR.md
 ├── Makefile
 ├── README.md
+├── TODOS.md
 ├── deps.edn
 ├── shadow-cljs.edn
 ├── dev
@@ -89,6 +103,7 @@ The frontend build is named `app` and writes assets to `resources/public/js`.
 - The `:frontend` alias pins the `shadow-cljs` toolchain versions it expects to avoid dependency drift.
 - `dev/user.clj` loads the common backend REPL helpers.
 - `.clj-kondo/config.edn` and `.cljfmt.edn` keep linting and formatting configuration minimal.
+- `DESIGN.md`, `EVALUATOR.md`, and `ENG_REVIEW.md` should be treated as the current implementation guide for the Live Core Editor MVP.
 
 ## Status
 
