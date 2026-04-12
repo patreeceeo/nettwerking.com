@@ -36,7 +36,7 @@ Use `make help` to list the available targets.
 
 For normal development, run two processes:
 
-1. `make repl` for backend work
+1. `make repl` for backend work in a Rebel Readline REPL
 2. `make frontend-watch` for frontend compilation and reload
 
 At the REPL:

@@ -4,7 +4,7 @@ help:
 	@printf "%s\n" \
 		"Available targets:" \
 		"  make run             Start the backend server" \
-		"  make repl            Start a dev REPL for backend reload workflow" \
+		"  make repl            Start a Rebel Readline dev REPL for backend reload workflow" \
 		"  make frontend-watch  Start shadow-cljs watch mode" \
 		"  make frontend-build  Build frontend assets once" \
 		"  make test            Run tests" \
@@ -17,7 +17,7 @@ run:
 	clojure -M:run
 
 repl:
-	clojure -M:dev
+	clojure -M:dev -m rebel-readline.main
 
 frontend-watch:
 	clojure -M:frontend watch app
