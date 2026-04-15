@@ -13,6 +13,8 @@
       buildDeps = [
         pkgs.jdk25
         pkgs.clojure
+        pkgs.chromium
+        pkgs.python3Minimal
       ];
     in {
       nixosModules = {
@@ -94,7 +96,7 @@
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = buildDeps ++ [
+        packages = buildDeps ++ [
           pkgs.gnumake
         ];
         shellHook = ''

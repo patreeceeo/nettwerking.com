@@ -1,7 +1,13 @@
-{:source-paths ["src"]
+{:source-paths ["src" "test"]
  :builds
  {:app {:target :browser
         :output-dir "resources/public/js"
         :asset-path "/js"
         :modules {:main {:init-fn app.frontend.app/init}}
-        :devtools {:after-load app.frontend.app/reload}}}}
+        :devtools {:after-load app.frontend.app/reload}}
+  :frontend-test {:target :browser-test
+                  :test-dir "target/frontend-tests"
+                  :runner-ns app.frontend.test-runner
+                  :ns-regexp "-test$"
+                  :devtools {:http-root "target/frontend-tests"
+                             :http-port 8022}}}}
