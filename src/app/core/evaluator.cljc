@@ -34,22 +34,22 @@
    :name name})
 
 (def default-builtins
-  {"+" {:name "+"
-        :min-arity 2
-        :validate-args (fn [args]
-                         (when-not (every? number? args)
-                           {:reason :invalid-argument-type
-                            :message "This function needs numeric arguments."}))
-        :apply (fn [args]
-                 (apply + args))}
-   "*" {:name "*"
-        :min-arity 2
-        :validate-args (fn [args]
-                         (when-not (every? number? args)
-                           {:reason :invalid-argument-type
-                            :message "This function needs numeric arguments."}))
-        :apply (fn [args]
-                 (apply * args))}})
+  {'+ {:name "+"
+       :min-arity 2
+       :validate-args (fn [args]
+                        (when-not (every? number? args)
+                          {:reason :invalid-argument-type
+                           :message "This function needs numeric arguments."}))
+       :apply (fn [args]
+                (apply + args))}
+   '* {:name "*"
+       :min-arity 2
+       :validate-args (fn [args]
+                        (when-not (every? number? args)
+                          {:reason :invalid-argument-type
+                           :message "This function needs numeric arguments."}))
+       :apply (fn [args]
+                (apply * args))}})
 
 (declare evaluate-node)
 
@@ -59,12 +59,12 @@
 (defn- find-result [kind results]
   (first (filter #(= kind (:kind %)) results)))
 
-(defn- builtins-entry [builtins name]
-  (get builtins name))
+(defn- builtins-entry [builtins fn-symbol]
+  (get builtins fn-symbol))
 
-(defn- apply-builtin [builtins builtin-name arg-values path]
+(defn- apply-builtin [builtins fn-symbol arg-values path]
   (let [{:keys [min-arity max-arity validate-args apply]}
-        (builtins-entry builtins builtin-name)]
+        (builtins-entry builtins fn-symbol)]
     (cond
       (nil? apply)
       (error-result :unknown-symbol "This function does not exist yet." path)
@@ -84,67 +84,69 @@
           (catch #?(:clj Throwable :cljs :default) _error
             (error-result :apply-failed "This expression could not be evaluated." path)))))))
 
+(defn- evaluate-leaf [node path builtins]
+  (case (:type node)
+    :literal
+    (if (contains? node :value)
+      (success (:value node) path)
+      (malformed-node path))
+
+    :symbol
+    (let [name (:name node)]
+      (cond
+        (not (string? name))
+        (malformed-node path)
+
+        (builtins-entry builtins (symbol name))
+        (success (builtin-ref name) path)
+
+        :else
+        (error-result :unknown-symbol "This function does not exist yet." path)))
+
+    :hole
+    (if (string? (:label node))
+      (partial-result :incomplete path)
+      (malformed-node path))
+
+    (malformed-node path)))
+
 (defn- evaluate-call [node path builtins]
-  (let [fn-node (:fn node)
+  (let [fn-symbol (:fn node)
         args (:args node)]
     (cond
-      (not (map? fn-node))
+      (not (symbol? fn-symbol))
       (malformed-node (conj path :fn))
 
       (not (vector? args))
       (malformed-node (conj path :args))
 
       :else
-      (let [fn-result (evaluate-node fn-node (conj path :fn) builtins)
-            arg-results (mapv (fn [index arg]
+      (let [arg-results (mapv (fn [index arg]
                                 (evaluate-node arg (conj path :args index) builtins))
                               (range (count args))
                               args)
-            child-results (into [fn-result] arg-results)]
-        (if-let [partial-result (find-result :partial child-results)]
-          partial-result
-          (if-let [child-error (find-result :error child-results)]
-            child-error
-            (let [resolved-fn (:value fn-result)]
-              (if-not (and (map? resolved-fn)
-                           (= :builtin (:type resolved-fn))
-                           (string? (:name resolved-fn)))
-                (error-result :not-callable "Only built-in functions can be called right now." path)
-                (apply-builtin builtins
-                               (:name resolved-fn)
-                               (mapv :value arg-results)
-                               path)))))))))
+            child-results arg-results]
+        (cond
+          (find-result :partial child-results)
+          (find-result :partial child-results)
+
+          (find-result :error child-results)
+          (find-result :error child-results)
+
+          :else
+          (if-not (builtins-entry builtins fn-symbol)
+            (error-result :unknown-symbol "This function does not exist yet." path)
+            (apply-builtin builtins
+                           fn-symbol
+                           (mapv :value arg-results)
+                           path)))))))
 
 (defn evaluate-node [node path builtins]
   (if-not (map? node)
     (malformed-node path)
     (case (:type node)
-      :literal
-      (if (contains? node :value)
-        (success (:value node) path)
-        (malformed-node path))
-
-      :symbol
-      (let [name (:name node)]
-        (cond
-          (not (string? name))
-          (malformed-node path)
-
-          (builtins-entry builtins name)
-          (success (builtin-ref name) path)
-
-          :else
-          (error-result :unknown-symbol "This function does not exist yet." path)))
-
-      :hole
-      (if (string? (:label node))
-        (partial-result :incomplete path)
-        (malformed-node path))
-
-      :call
-      (evaluate-call node path builtins)
-
-      (malformed-node path))))
+      :call (evaluate-call node path builtins)
+      (evaluate-leaf node path builtins))))
 
 (defn evaluate
   ([root]

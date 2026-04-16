@@ -15,12 +15,12 @@
             :node-path []}
            (evaluator/evaluate (editor/symbol-node "+"))))))
 
-(deftest evaluates-nested-calls-eagerly
+(deftest evaluates-nested-forms-eagerly
   (let [expression (editor/call-node
-                    (editor/symbol-node "*")
+                    '*
                     [(editor/literal-node 2)
                      (editor/call-node
-                      (editor/symbol-node "+")
+                      '+
                       [(editor/literal-node 3)
                        (editor/literal-node 4)])])]
     (is (= {:kind :success
@@ -30,7 +30,7 @@
 
 (deftest returns-partial-when-a-hole-is-present
   (let [expression (editor/call-node
-                    (editor/symbol-node "+")
+                    '+
                     [(editor/literal-node 2)
                      (editor/hole-node "add value")])]
     (is (= {:kind :partial
@@ -38,7 +38,7 @@
             :node-path [:args 1]}
            (evaluator/evaluate expression)))))
 
-(deftest returns-errors-for-unknown-symbols-arity-and-types
+(deftest returns-errors-for-unknown-symbols-arity-types-and-malformed-call-heads
   (testing "unknown symbols return structured errors"
     (is (= {:kind :error
             :reason :unknown-symbol
@@ -52,7 +52,7 @@
             :node-path []}
            (evaluator/evaluate
             (editor/call-node
-             (editor/symbol-node "+")
+             '+
              [(editor/literal-node 2)])))))
   (testing "invalid types return a structured error"
     (is (= {:kind :error
@@ -61,28 +61,46 @@
             :node-path []}
            (evaluator/evaluate
             (editor/call-node
-             (editor/symbol-node "+")
+             '+
              [(editor/literal-node 2)
-              (editor/literal-node "three")]))))))
+              (editor/literal-node "three")])))))
+  (testing "non-symbol call heads fail as malformed nodes"
+    (is (= {:kind :error
+            :reason :malformed-node
+            :message "This expression node is malformed."
+            :node-path [:fn]}
+           (evaluator/evaluate
+            (editor/call-node
+             "wat"
+             [(editor/literal-node 3)]))))))
 
 (deftest returns-errors-for-malformed-nodes
-  (is (= {:kind :error
-          :reason :malformed-node
-          :message "This expression node is malformed."
-          :node-path []}
-         (evaluator/evaluate {:type :literal}))))
+  (testing "malformed leaves fail"
+    (is (= {:kind :error
+            :reason :malformed-node
+            :message "This expression node is malformed."
+            :node-path []}
+           (evaluator/evaluate {:type :literal}))))
+  (testing "malformed args fail at the args path"
+    (is (= {:kind :error
+            :reason :malformed-node
+            :message "This expression node is malformed."
+            :node-path [:fn]}
+           (evaluator/evaluate {:type :call
+                                :fn "+"
+                                :args {:bad true}})))))
 
 (deftest never-leaks-raw-exceptions
-  (let [throwing-builtins {"boom" {:name "boom"
-                                   :min-arity 0
-                                   :apply (fn [_args]
-                                            (throw (ex-info "kaboom" {})))}}]
+  (let [throwing-builtins {'boom {:name "boom"
+                                  :min-arity 0
+                                  :apply (fn [_args]
+                                           (throw (ex-info "kaboom" {})))}}]
     (is (= {:kind :error
             :reason :apply-failed
             :message "This expression could not be evaluated."
             :node-path []}
            (evaluator/evaluate
             (editor/call-node
-             (editor/symbol-node "boom")
+             'boom
              [])
             throwing-builtins)))))

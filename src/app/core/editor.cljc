@@ -20,24 +20,35 @@
    {:type :hole
     :label label}))
 
-(defn call-node [fn-node args]
+(defn call-node [fn-symbol args]
   {:type :call
-   :fn fn-node
+   :fn fn-symbol
    :args (vec args)})
+
+(defn node-args [node]
+  (if (= :call (:type node))
+    (vec (:args node))
+    []))
+
+(defn call-fn-symbol [node]
+  (when (= :call (:type node))
+    (:fn node)))
 
 (def starter-root
   (call-node
-   (symbol-node "+")
+   '+
    [(literal-node 2)
     (hole-node "add value")]))
 
-(defn- valid-node-tree? [node]
+(declare valid-node-tree?)
+
+(defn valid-node-tree? [node]
   (and (map? node)
        (case (:type node)
          :literal (contains? node :value)
          :symbol (string? (:name node))
          :hole (string? (:label node))
-         :call (and (valid-node-tree? (:fn node))
+         :call (and (symbol? (:fn node))
                     (vector? (:args node))
                     (every? valid-node-tree? (:args node)))
          false)))
@@ -49,26 +60,31 @@
 
 (defn valid-node-path? [root path]
   (and (vector? path)
-       (some? (node-at-path root path))))
+       (loop [node root
+              path path]
+         (cond
+           (nil? node) false
+           (empty? path) true
+           (and (= :args (first path))
+                (integer? (second path))
+                (= :call (:type node)))
+           (let [index (second path)
+                 args (:args node)]
+             (and (<= 0 index)
+                  (< index (count args))
+                  (recur (nth args index) (subvec path 2))))
+           :else false))))
 
 (defn- ordered-child-paths [root path]
   (let [node (node-at-path root path)]
-    (case (:type node)
-      :call
-      (into [(conj path :fn)]
-            (map (fn [index] (conj path :args index))
-                 (range (count (:args node)))))
-      [])))
+    (mapv (fn [index] (conj path :args index))
+          (range (count (node-args node))))))
 
 (defn parent-path [path]
-  (cond
-    (empty? path) nil
-    (= :fn (peek path)) (pop path)
-    (and (integer? (peek path))
-         (>= (count path) 2)
-         (= :args (nth path (- (count path) 2))))
-    (pop (pop path))
-    :else nil))
+  (when (and (integer? (peek path))
+             (>= (count path) 2)
+             (= :args (nth path (- (count path) 2))))
+    (pop (pop path))))
 
 (defn- sibling-path [root path direction]
   (when-let [parent (parent-path path)]
@@ -96,7 +112,7 @@
     {:selection-valid? false
      :actions [(action :insert-literal false :reason :invalid-selection)
                (action :insert-symbol false :reason :invalid-selection)
-               (action :wrap-selected-in-call false :reason :invalid-selection)
+               (action :wrap-selected false :reason :invalid-selection)
                (action :delete-selected false :reason :invalid-selection)
                (action :move-selection-parent false :reason :invalid-selection)
                (action :move-selection-first-child false :reason :invalid-selection)
@@ -107,7 +123,7 @@
       {:selection-valid? true
        :actions [(action :insert-literal true)
                  (action :insert-symbol true)
-                 (action :wrap-selected-in-call (not hole-selected?)
+                 (action :wrap-selected (not hole-selected?)
                          :reason (when hole-selected? :hole-selected))
                  (action :delete-selected (not hole-selected?)
                          :reason (when hole-selected? :already-hole))
@@ -259,16 +275,16 @@
                        selection
                        {:storage-kind :dirty})))
 
-      (= :wrap-selected-in-call command-type)
+      (= :wrap-selected command-type)
       (let [selected-node (node-at-path root selection)]
         (if (= :hole (:type selected-node))
           (invalid-command-state state :cannot-wrap-hole)
-          (build-state (replace-node root
-                                     selection
-                                     (call-node (symbol-node (or (:fn-name command) "+"))
-                                                [selected-node (hole-node "add value")]))
-                       (into selection [:args 1])
-                       {:storage-kind :dirty})))
+          (let [wrapped-node (call-node
+                              (symbol (or (:operator-name command) "+"))
+                              [selected-node (hole-node "add value")])]
+            (build-state (replace-node root selection wrapped-node)
+                         (into selection [:args 1])
+                         {:storage-kind :dirty}))))
 
       (= :delete-selected command-type)
       (let [selected-node (node-at-path root selection)]

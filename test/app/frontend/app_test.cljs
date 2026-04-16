@@ -64,6 +64,7 @@
 
 (deftest fills-the-starter-hole-to-visible-success
   (mount-app!)
+  (is (= :call (get-in (app/current-state) [:root :type])))
   (click! (testid "action-insert-literal-3"))
   (is (= "Success" (text-content "[data-testid='status-kind']")))
   (is (= "5" (text-content "[data-testid='result-value']")))
@@ -75,6 +76,7 @@
   (mount-app!)
   (click! (testid "node-args-0"))
   (click! (testid "action-wrap"))
+  (is (= :call (get-in (app/current-state) [:root :args 0 :type])))
   (is (= "Partial" (text-content "[data-testid='status-kind']")))
   (is (= "node-args-0-args-1" (selected-node-id)))
   (click! (testid "action-insert-literal-4"))
@@ -108,9 +110,9 @@
   (keydown! (testid "node-args-0") "ArrowUp")
   (is (= "node-root" (selected-node-id)))
   (keydown! (testid "node-root") "ArrowDown")
-  (is (= "node-fn" (selected-node-id)))
-  (keydown! (testid "node-fn") "ArrowRight")
   (is (= "node-args-0" (selected-node-id)))
+  (keydown! (testid "node-args-0") "ArrowRight")
+  (is (= "node-args-1" (selected-node-id)))
   (click! (testid "node-args-1"))
   (click! (testid "action-insert-symbol-wat"))
   (is (= "Error" (text-content "[data-testid='status-kind']")))

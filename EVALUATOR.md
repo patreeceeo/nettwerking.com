@@ -84,7 +84,7 @@ Suggested examples:
 {:type :symbol :name "+"}
 {:type :hole :label "add value"}
 {:type :call
- :fn {:type :symbol :name "+"}
+ :fn '+
  :args [{:type :literal :value 2}
         {:type :literal :value 3}]}
 ```
@@ -103,10 +103,10 @@ Requirements:
 Suggested built-in table shape:
 
 ```clojure
-{"+" {:apply (fn [args] ...)
-      :min-arity 2}
- "*" {:apply (fn [args] ...)
-      :min-arity 2}}
+{'+ {:apply (fn [args] ...)
+     :min-arity 2}
+ '* {:apply (fn [args] ...)
+     :min-arity 2}}
 ```
 
 ## Partial Evaluation
@@ -119,7 +119,7 @@ Examples:
 
 - `(+ 2 ?)` -> `:partial`
 - `(? 2 3)` -> `:partial`
-- nested call with a hole in a descendant -> `:partial`
+- nested form with a hole in a descendant -> `:partial`
 
 Partial means:
 
@@ -158,11 +158,11 @@ evaluate(node)
   ├── symbol -> success(built-in-ref) or error(:unknown-symbol)
   └── call
       │
-      ├── evaluate fn position
+      ├── validate fn symbol
       ├── evaluate each arg eagerly
       ├── if any partial -> partial
       ├── if any error -> error
-      ├── validate callable + arity + argument types
+      ├── resolve built-in + validate arity + argument types
       └── apply built-in -> success(value) or error(:apply-failed)
 ```
 
@@ -204,6 +204,7 @@ Minimum test cases:
 
 - literal success
 - built-in symbol resolution success
+- nested form success
 - nested call success
 - hole produces `:partial`
 - unknown symbol produces `:error`

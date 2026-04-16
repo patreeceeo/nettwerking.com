@@ -18,12 +18,12 @@
     (is (= [:args 1] (:selection state)))
     (is (= :hole (:type selected-node)))
     (is (true? (:enabled? (:insert-literal actions))))
-    (is (false? (:enabled? (:wrap-selected-in-call actions))))))
+    (is (false? (:enabled? (:wrap-selected actions))))))
 
 (deftest restore-state-handles-valid-and-invalid-snapshots
   (testing "a valid snapshot is restored"
     (let [snapshot {:root (editor/call-node
-                           (editor/symbol-node "+")
+                           '+
                            [(editor/literal-node 2)
                             (editor/literal-node 3)])
                     :selection [:args 0]}
@@ -33,14 +33,16 @@
       (is (= [:args 0] (:selection state)))
       (is (= :success (get-in state [:eval :kind])))))
   (testing "an invalid snapshot falls back safely"
-    (let [state (editor/restore-state {:root {:type :call :args []}})]
+    (let [state (editor/restore-state {:root {:type :call
+                                              :fn "+"
+                                              :args {:bad true}}})]
       (is (= :error (get-in state [:status :kind])))
       (is (= :invalid-saved-state (get-in state [:status :reason])))
       (is (= :recovered (get-in state [:storage :kind])))
       (is (= editor/starter-root (:root state)))))
   (testing "an invalid saved selection keeps a valid tree but recovers the selection"
     (let [snapshot {:root (editor/call-node
-                           (editor/symbol-node "+")
+                           '+
                            [(editor/literal-node 2)
                             (editor/literal-node 3)])
                     :selection [:args 4]}
@@ -56,14 +58,14 @@
           actions (actions-by-id state)]
       (is (true? (get-in state [:available-actions :selection-valid?])))
       (is (true? (:enabled? (:insert-symbol actions))))
-      (is (= :hole-selected (:reason (:wrap-selected-in-call actions))))
+      (is (= :hole-selected (:reason (:wrap-selected actions))))
       (is (= :already-hole (:reason (:delete-selected actions))))))
   (testing "literals expose wrap and delete actions"
     (let [state (editor/apply-command (editor/initial-state)
                                       {:type :select
                                        :path [:args 0]})
           actions (actions-by-id state)]
-      (is (true? (:enabled? (:wrap-selected-in-call actions))))
+      (is (true? (:enabled? (:wrap-selected actions))))
       (is (true? (:enabled? (:delete-selected actions))))
       (is (true? (:enabled? (:move-selection-parent actions))))))
   (testing "invalid selections return explicit reasons"
@@ -93,13 +95,14 @@
       (is (= 4 (:value (editor/node-at-path (:root state) [:args 0]))))
       (is (= :success (get-in state [:eval :kind])))
       (is (= 7 (get-in state [:eval :value])))))
-  (testing "wrapping a selected node creates a partial call and moves selection"
+  (testing "wrapping a selected node creates a partial form and moves selection"
     (let [state (-> (editor/initial-state)
                     (editor/apply-command {:type :select
                                            :path [:args 0]})
-                    (editor/apply-command {:type :wrap-selected-in-call
-                                           :fn-name "*"}))]
+                    (editor/apply-command {:type :wrap-selected
+                                           :operator-name "*"}))]
       (is (= :call (:type (editor/node-at-path (:root state) [:args 0]))))
+      (is (= '* (get-in state [:root :args 0 :fn])))
       (is (= [:args 0 :args 1] (:selection state)))
       (is (= :partial (get-in state [:eval :kind])))))
   (testing "deleting a subtree replaces it with a hole"
@@ -120,7 +123,7 @@
                                          :direction :first-child})
                   (editor/apply-command {:type :move-selection
                                          :direction :right-sibling}))]
-    (is (= [:args 0] (:selection state)))))
+    (is (= [:args 1] (:selection state)))))
 
 (deftest invalid-commands-fail-explicitly
   (testing "unknown commands return a structured error status"
@@ -130,6 +133,6 @@
       (is (= :unknown-command (get-in state [:status :reason])))))
   (testing "attempting to wrap a hole fails fast"
     (let [state (editor/apply-command (editor/initial-state)
-                                      {:type :wrap-selected-in-call})]
+                                      {:type :wrap-selected})]
       (is (= :error (get-in state [:status :kind])))
       (is (= :cannot-wrap-hole (get-in state [:status :reason]))))))

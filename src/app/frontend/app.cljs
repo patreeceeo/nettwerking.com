@@ -24,20 +24,30 @@
   (edn/read-string path-string))
 
 (defn- node-kind-label [node]
-  (case (:type node)
-    :literal "literal"
-    :symbol "function"
-    :hole "hole"
-    :call "call"
-    "node"))
+  (if (= :call (:type node))
+    "form"
+    (case (:type node)
+      :literal "literal"
+      :symbol "symbol"
+      :hole "hole"
+      "node")))
+
+(declare node-text)
+
+(defn- displayed-node [node]
+  (if (= :call (:type node))
+    (if-let [fn-symbol (editor/call-fn-symbol node)]
+      (editor/symbol-node (name fn-symbol))
+      {:type :hole :label "unknown form"})
+    node))
 
 (defn- node-text [node]
-  (case (:type node)
-    :literal (str (:value node))
-    :symbol (:name node)
-    :hole (:label node)
-    :call "call"
-    "unknown"))
+  (let [node (displayed-node node)]
+    (case (:type node)
+      :literal (str (:value node))
+      :symbol (:name node)
+      :hole (:label node)
+      "unknown")))
 
 (defn- action-by-id [state action-id]
   (first (filter #(= action-id (:id %))
@@ -99,11 +109,20 @@
 (defn- selection-copy [state]
   (let [selected-node (editor/node-at-path (:root state) (:selection state))
         node-type (:type selected-node)]
-    (case node-type
-      :hole "Selected hole. Add a value or choose a function next."
-      :literal "Selected literal. You can wrap it, replace it, or move around the tree."
-      :symbol "Selected function. You can replace it or move around the tree."
-      :call "Selected call. Move into its children or replace the whole call."
+    (cond
+      (= :call node-type)
+      "Selected form. Move into its arguments or replace the whole form."
+
+      (= :hole node-type)
+      "Selected hole. Add a value or choose a symbol next."
+
+      (= :literal node-type)
+      "Selected literal. You can wrap it, replace it, or move around the tree."
+
+      (= :symbol node-type)
+      "Selected symbol. You can replace it or move around the tree."
+
+      :else
       "Select a node to continue.")))
 
 (defn- result-copy [state]
@@ -116,9 +135,35 @@
 
 (declare render-node)
 
+(defn- node-meta-label [node]
+  (if (= :call (:type node))
+    "form"
+    (case (:type node)
+      :literal "literal"
+      :symbol "symbol"
+      :hole "hole"
+      "node")))
+
+(defn- render-node-content [node]
+  (let [display-node (displayed-node node)]
+    (case (:type display-node)
+      :literal
+      (str "<span class='node-value'>" (html-escape (:value display-node)) "</span>"
+           "<span class='node-meta'>" (node-meta-label node) "</span>")
+
+      :symbol
+      (str "<span class='node-value'>" (html-escape (:name display-node)) "</span>"
+           "<span class='node-meta'>" (node-meta-label node) "</span>")
+
+      :hole
+      (str "<span class='node-value'>" (html-escape (:label display-node)) "</span>"
+           "<span class='node-meta'>" (node-meta-label node) "</span>")
+
+      "<span class='node-value'>unknown node</span>")))
+
 (defn- render-node-button [state path node content]
   (let [selected? (= path (:selection state))
-        classes (cond-> ["node-button" (str "node-" (name (:type node)))]
+        classes (cond-> ["node-button" (str "node-" (name (:type (displayed-node node))))]
                   selected? (conj "selected-node"))
         aria-label (str (string/capitalize (node-kind-label node))
                         ": "
@@ -146,47 +191,19 @@
                 args)))
 
 (defn- render-node [state path node]
-  (case (:type node)
-    :call
-    (str "<div class='tree-call'>"
-         (render-node-button state
-                             path
-                             node
-                             "<span class='node-title'>call</span>")
-         "<div class='tree-children'>"
-         "<div class='tree-branch'>"
-         "<div class='branch-label'>fn</div>"
-         (render-node state (conj path :fn) (:fn node))
-         "</div>"
-         (render-children state path (:args node))
-         "</div>"
-         "</div>")
-
-    :literal
-    (render-node-button state
-                        path
-                        node
-                        (str "<span class='node-value'>" (html-escape (:value node)) "</span>"
-                             "<span class='node-meta'>literal</span>"))
-
-    :symbol
-    (render-node-button state
-                        path
-                        node
-                        (str "<span class='node-value'>" (html-escape (:name node)) "</span>"
-                             "<span class='node-meta'>function</span>"))
-
-    :hole
-    (render-node-button state
-                        path
-                        node
-                        (str "<span class='node-value'>" (html-escape (:label node)) "</span>"
-                             "<span class='node-meta'>hole</span>"))
-
-    (render-node-button state
-                        path
-                        {:type :hole}
-                        "<span class='node-value'>unknown node</span>")))
+  (let [button-html
+        (render-node-button state
+                            path
+                            node
+                            (render-node-content node))
+        args (editor/node-args node)]
+    (str "<div class='tree-form'>"
+         button-html
+         (when (seq args)
+           (str "<div class='tree-children'>"
+                (render-children state path args)
+                "</div>"))
+         "</div>")))
 
 (defn- action-button [state action-id {:keys [label testid command attrs]}]
   (let [{:keys [enabled? reason]} (action-by-id state action-id)
@@ -261,10 +278,10 @@
                                               :testid "action-insert-symbol-wat"
                                               :command "insert-symbol"
                                               :attrs {:name "wat"}})
-         (action-button state :wrap-selected-in-call {:label "Wrap In *"
-                                                      :testid "action-wrap"
-                                                      :command "wrap-selected-in-call"
-                                                      :attrs {:fn-name "*"}})
+         (action-button state :wrap-selected {:label "Wrap In *"
+                                              :testid "action-wrap"
+                                              :command "wrap-selected"
+                                              :attrs {:operator-name "*"}})
          (action-button state :delete-selected {:label "Delete"
                                                 :testid "action-delete"
                                                 :command "delete-selected"
@@ -360,8 +377,8 @@
                         :value (edn/read-string (or (.getAttribute element "data-value") "0"))}
       "insert-symbol" {:type :insert-symbol
                        :name (.getAttribute element "data-name")}
-      "wrap-selected-in-call" {:type :wrap-selected-in-call
-                               :fn-name (.getAttribute element "data-fn-name")}
+      "wrap-selected" {:type :wrap-selected
+                       :operator-name (.getAttribute element "data-operator-name")}
       "delete-selected" {:type :delete-selected}
       "move-selection" {:type :move-selection
                         :direction (keyword (.getAttribute element "data-direction"))}
