@@ -9,48 +9,49 @@
 
 (defonce current-instance (atom nil))
 
-(def menu-action-definitions
-  [{:id :insert-literal-3
-    :action-id :insert-literal
-    :label "Insert 3"
-    :summary "Replace the selected node with 3."
-    :testid "action-insert-literal-3"
-    :command {:type :insert-literal
-              :value 3}}
-   {:id :insert-literal-4
-    :action-id :insert-literal
-    :label "Insert 4"
-    :summary "Replace the selected node with 4."
-    :testid "action-insert-literal-4"
-    :command {:type :insert-literal
-              :value 4}}
-   {:id :insert-symbol-plus
-    :action-id :insert-symbol
-    :label "Use +"
-    :summary "Replace the selected node with +."
-    :testid "action-insert-symbol-plus"
-    :command {:type :insert-symbol
-              :name "+"}}
-   {:id :insert-symbol-wat
-    :action-id :insert-symbol
-    :label "Use wat"
-    :summary "Replace the selected node with wat."
-    :testid "action-insert-symbol-wat"
-    :command {:type :insert-symbol
-              :name "wat"}}
-   {:id :wrap-selected
-    :action-id :wrap-selected
-    :label "Wrap In *"
-    :summary "Wrap the selected node in a new form."
-    :testid "action-wrap"
-    :command {:type :wrap-selected
-              :operator-name "*"}}
-   {:id :delete-selected
-    :action-id :delete-selected
-    :label "Delete Node"
-    :summary "Replace the selected node with a hole."
-    :testid "action-delete"
-    :command {:type :delete-selected}}])
+(def menu-items-by-action-id
+  {:insert-literal
+   [{:id :insert-literal-3
+     :label "Insert 3"
+     :summary "Replace the selected node with 3."
+     :testid "action-insert-literal-3"
+     :command {:type :insert-literal
+               :value 3}}
+    {:id :insert-literal-4
+     :label "Insert 4"
+     :summary "Replace the selected node with 4."
+     :testid "action-insert-literal-4"
+     :command {:type :insert-literal
+               :value 4}}]
+
+   :insert-symbol
+   [{:id :insert-symbol-plus
+     :label "Use +"
+     :summary "Replace the selected node with +."
+     :testid "action-insert-symbol-plus"
+     :command {:type :insert-symbol
+               :name "+"}}
+    {:id :insert-symbol-wat
+     :label "Use wat"
+     :summary "Replace the selected node with wat."
+     :testid "action-insert-symbol-wat"
+     :command {:type :insert-symbol
+               :name "wat"}}]
+
+   :wrap-selected
+   [{:id :wrap-selected
+     :label "Wrap In *"
+     :summary "Wrap the selected node in a new form."
+     :testid "action-wrap"
+     :command {:type :wrap-selected
+               :operator-name "*"}}]
+
+   :delete-selected
+   [{:id :delete-selected
+     :label "Delete Node"
+     :summary "Replace the selected node with a hole."
+     :testid "action-delete"
+     :command {:type :delete-selected}}]})
 
 (defn- html-escape [value]
   (gstring/htmlEscape (str value)))
@@ -91,10 +92,6 @@
       :symbol (:name node)
       :hole (:label node)
       "unknown")))
-
-(defn- action-by-id [domain-state action-id]
-  (first (filter #(= action-id (:id %))
-                 (get-in domain-state [:available-actions :actions]))))
 
 (defn- reason-copy [reason]
   (case reason
@@ -193,10 +190,10 @@
       (default-expanded-path domain-state))))
 
 (defn- available-menu-actions [shell-state]
-  (let [domain-state (:domain shell-state)]
-    (filterv (fn [{:keys [action-id]}]
-               (:enabled? (action-by-id domain-state action-id)))
-             menu-action-definitions)))
+  (->> (get-in shell-state [:domain :available-actions :actions])
+       (filter :enabled?)
+       (mapcat #(get menu-items-by-action-id (:id %)))
+       vec))
 
 (defn- normalize-menu [shell-state]
   (let [actions (available-menu-actions shell-state)
