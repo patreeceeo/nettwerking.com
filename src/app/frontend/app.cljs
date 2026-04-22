@@ -93,15 +93,6 @@
       :error (or (:message evaluation) "This expression could not be evaluated.")
       "No result yet.")))
 
-(defn- node-meta-label [node]
-  (if (= :call (:type node))
-    "form"
-    (case (:type node)
-      :literal "literal"
-      :symbol "symbol"
-      :hole "hole"
-      "node")))
-
 (defn- storage-get [storage storage-key]
   (when storage
     (try
@@ -227,7 +218,7 @@
   (let [display-node (displayed-node node)]
     [:<>
      [:span.node-token (node-text display-node)]
-     [:span.node-meta (node-meta-label node)]]))
+     [:span.node-meta (node-kind-label node)]]))
 
 (defn- node-button-view [instance path node selected? extra-class testid region]
   (let [classes (cond-> ["node-button" extra-class]
