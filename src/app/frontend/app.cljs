@@ -475,14 +475,6 @@
       (reset! timeout-id
               (js/setTimeout #(persist-now! instance) persist-delay-ms)))))
 
-(defn- selected-node-element [instance]
-  (.querySelector (:container instance)
-                  "[data-node-body='true'][data-selected='true']"))
-
-(defn- focus-selected-node! [instance]
-  (when-let [selected-element (selected-node-element instance)]
-    (.focus selected-element)))
-
 (declare render!)
 
 (defn- update-shell! [instance update-fn persist?]
@@ -653,8 +645,7 @@
 
 (defn render! [instance]
   (set! (.-innerHTML (:container instance))
-        (app-html @(:state instance)))
-  (focus-selected-node! instance))
+        (app-html @(:state instance))))
 
 (defn current-state []
   (some-> @current-instance :state deref :domain))

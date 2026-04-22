@@ -101,9 +101,7 @@
 
 (deftest wraps-deletes-and-recovers-through-the-ui
   (mount-app!)
-  (let [selected (testid "stack-node-args-1")]
-    (.focus selected)
-    (keydown! selected "ArrowUp"))
+  (keydown! (testid "stack-node-args-1") "ArrowUp")
   (is (= "stack-node-args-0" (selected-node-id)))
   (keydown! (testid "stack-node-args-0") ".")
   (click! (testid "action-wrap"))
@@ -173,9 +171,7 @@
 
 (deftest keyboard-navigation-and-menu-focus-work
   (mount-app!)
-  (let [selected (testid "stack-node-args-1")]
-    (.focus selected)
-    (keydown! selected "ArrowUp"))
+  (keydown! (testid "stack-node-args-1") "ArrowUp")
   (is (= "stack-node-args-0" (selected-node-id)))
   (keydown! (testid "stack-node-args-0") "ArrowUp")
   (is (= "breadcrumb-root" (selected-node-id)))
