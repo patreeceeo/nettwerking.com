@@ -205,7 +205,8 @@
                               (get-in @(:state instance) [:domain :selection]))
           nil))
 
-      (= "Enter" (.-key event))
+      (and (= "Enter" (.-key event))
+           (get-in @(:state instance) [:menu :open?]))
       (when-let [action-id (:id (shell/current-menu-action @(:state instance)))]
         (.preventDefault event)
         (activate-menu-action! instance action-id))
