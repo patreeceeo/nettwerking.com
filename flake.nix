@@ -16,7 +16,6 @@
         pkgs.nodejs_20
         pkgs.chromium
         pkgs.python3Minimal
-        pkgs.curl
       ];
     in {
       nixosModules = {

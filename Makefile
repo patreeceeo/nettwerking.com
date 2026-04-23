@@ -35,23 +35,7 @@ frontend-test:
 	python3 -m http.server 8022 --directory target/frontend-tests >/tmp/frontend-test-server.log 2>&1 & \
 	SERVER_PID="$$!"; \
 	trap 'kill "$$SERVER_PID" >/dev/null 2>&1 || true' EXIT INT TERM; \
-	TEST_SERVER_URL="http://127.0.0.1:8022/index.html"; \
-	SERVER_READY="false"; \
-	for attempt in $$(seq 1 50); do \
-		if curl -fsS "$$TEST_SERVER_URL" >/dev/null; then \
-			SERVER_READY="true"; \
-			break; \
-		fi; \
-		if ! kill -0 "$$SERVER_PID" >/dev/null 2>&1; then \
-			printf "%s\n" "frontend-test server exited before $$TEST_SERVER_URL became ready" >&2; \
-			exit 1; \
-		fi; \
-		sleep 0.1; \
-	done; \
-	if [ "$$SERVER_READY" != "true" ]; then \
-		printf "%s\n" "frontend-test timed out waiting for $$TEST_SERVER_URL" >&2; \
-		exit 1; \
-	fi; \
+	until python3 request_test_page.py; do sleep 0.1; done; \
 	DOM_DUMP="$$(chromium --headless=new --no-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --run-all-compositor-stages-before-draw --virtual-time-budget=5000 --dump-dom "http://127.0.0.1:8022/index.html")"; \
 	printf "%s\n" "$$DOM_DUMP" | python3 dev/frontend_test_status.py
 
