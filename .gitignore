@@ -6,6 +6,10 @@
 *.jar
 /resources/public/*
 !/resources/public/index.html
+.rebel_readline_history
+.gstack/
+node_modules
 
 # Produced by nix build
 result
+

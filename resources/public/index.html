@@ -7,16 +7,281 @@
     <style>
       :root {
         color-scheme: light;
-        font-family: sans-serif;
+        font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+        --color-background: #f6f1e7;
+        --color-surface: #fffdfa;
+        --color-text: #231f1a;
+        --color-text-muted: #675e55;
+        --color-border: rgba(35, 31, 26, 0.14);
+        --color-border-strong: rgba(35, 31, 26, 0.22);
+        --color-accent: #315f8a;
+        --color-accent-soft: #dbe9f6;
+        --color-selection: #1b3550;
+        --color-selection-soft: #e4eef7;
       }
 
       body {
         margin: 0;
         padding: 2rem;
+        background: linear-gradient(180deg, #f2eadb 0%, var(--color-background) 100%);
+        color: var(--color-text);
       }
 
-      main {
-        max-width: 48rem;
+      button {
+        font: inherit;
+      }
+
+      .editor-shell {
+        max-width: 82rem;
+        margin: 0 auto;
+      }
+
+      .orientation-header {
+        margin-bottom: 1.5rem;
+      }
+
+      .orientation-header h1 {
+        margin: 0 0 0.35rem;
+        font-family: "Iowan Old Style", "Palatino Linotype", serif;
+        font-size: 2.4rem;
+      }
+
+      .status-summary,
+      .node-meta,
+      .menu-action-copy span {
+        color: var(--color-text-muted);
+      }
+
+      .workspace-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 2.2fr) minmax(18rem, 1fr);
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .tree-panel,
+      .status-panel {
+        background: color-mix(in srgb, var(--color-surface) 94%, white);
+        border: 1px solid var(--color-border);
+        border-radius: 1rem;
+        padding: 1rem;
+      }
+
+      .panel-heading {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.75rem;
+        color: var(--color-text-muted);
+      }
+
+      .tree-panel {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .breadcrumbs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.55rem;
+      }
+
+      .breadcrumb-item {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .breadcrumb-separator {
+        color: var(--color-text-muted);
+      }
+
+      .breadcrumb-focus {
+        position: relative;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+      }
+
+      .child-stack {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .stack-row-shell {
+        display: grid;
+        gap: 0.45rem;
+      }
+
+      .stack-row,
+      .focus-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.75rem;
+        align-items: start;
+        border: 1px solid var(--color-border);
+        border-radius: 0.9rem;
+        background: white;
+        padding: 0.75rem;
+      }
+
+      .focus-row,
+      .selected-breadcrumb .breadcrumb-button {
+        border-color: var(--color-selection);
+        box-shadow: 0 0 0 3px rgba(27, 53, 80, 0.12);
+      }
+
+      .focus-row {
+        background: var(--color-selection-soft);
+      }
+
+      .node-button {
+        display: inline-flex;
+        text-align: left;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 0.6rem;
+        width: 100%;
+        background: white;
+        border: 1px solid var(--color-border-strong);
+        border-radius: 0.75rem;
+        padding: 0.65rem 0.8rem;
+        color: var(--color-text);
+      }
+
+      .breadcrumb-button {
+        min-width: 9rem;
+        padding-right: 2.3rem;
+      }
+
+      .breadcrumb-item .menu-toggle {
+        position: absolute;
+        right: 0.45rem;
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 0.15rem 0.35rem;
+        border: 1px solid var(--color-border-strong);
+        border-radius: 0.45rem;
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .stack-button {
+        min-height: 3rem;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+      }
+
+      .selected-node {
+        background: var(--color-selection-soft);
+        border-color: var(--color-selection);
+      }
+
+      .stack-button.selected-node {
+        background: transparent;
+        border-color: transparent;
+      }
+
+      .node-token,
+      .result-value,
+      .status-kind {
+        font-weight: 600;
+      }
+
+      .node-token {
+        font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      }
+
+      .status-kind {
+        margin-bottom: 0.5rem;
+      }
+
+      .result-value {
+        margin-top: 1rem;
+        font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+      }
+
+      .status-live {
+        position: absolute;
+        left: -9999px;
+      }
+
+      .menu-toggle {
+        border: 1px solid var(--color-border-strong);
+        background: rgba(255, 255, 255, 0.92);
+        border-radius: 0.7rem;
+        padding: 0.4rem 0.7rem;
+      }
+
+      .selected-toggle {
+        border-color: var(--color-selection);
+      }
+
+      .action-menu {
+        position: relative;
+        display: grid;
+        gap: 0.55rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.9rem;
+        padding: 0.85rem;
+        background: rgba(255, 255, 255, 0.88);
+      }
+
+      .action-menu::before {
+        content: "";
+        position: absolute;
+        top: -0.45rem;
+        left: 1.1rem;
+        width: 0.85rem;
+        height: 0.85rem;
+        background: rgba(255, 255, 255, 0.88);
+        border-top: 1px solid var(--color-border);
+        border-left: 1px solid var(--color-border);
+        transform: rotate(45deg);
+      }
+
+      .menu-action {
+        width: 100%;
+        text-align: left;
+        border: 1px solid var(--color-border);
+        background: white;
+        border-radius: 0.75rem;
+        padding: 0.65rem 0.75rem;
+      }
+
+      .selected-action {
+        border-color: rgba(49, 95, 138, 0.34);
+        background: var(--color-accent-soft);
+        box-shadow: 0 0 0 2px rgba(49, 95, 138, 0.08);
+      }
+
+      .menu-action-copy {
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .empty-stack {
+        border-radius: 0.8rem;
+        padding: 0.8rem;
+        background: white;
+        color: var(--color-text-muted);
+        border: 1px dashed var(--color-border);
+      }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 1rem;
+        }
+
+        .workspace-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .focus-row {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
