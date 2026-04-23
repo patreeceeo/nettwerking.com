@@ -120,8 +120,6 @@
         (catch :default _error
           ::invalid-snapshot)))))
 
-(declare render!)
-
 (defn- persist-now! [instance]
   (let [{:keys [storage storage-key state timeout-id]} instance]
     (reset! timeout-id nil)
@@ -326,6 +324,18 @@
                                :on-click stop-event!}
         [action-menu-view instance shell-state]])]))
 
+(defn- stack-row-content-view [instance path node selected-row?]
+  [:div {:class (str "stack-row" (when selected-row? " focus-row"))
+         :data-testid (when selected-row? "focus-row")}
+   [node-button-view instance
+    path
+    node
+    selected-row?
+    "stack-button"
+    (str "stack-node-" (path-id path))
+    "stack"]
+   [menu-toggle-view instance path selected-row?]])
+
 (defn- stack-row-view [instance shell-state path]
   (let [domain-state (:domain shell-state)
         node (editor/node-at-path (:root domain-state) path)
@@ -336,27 +346,9 @@
     (if menu-open?
       [:div.stack-row-shell {:data-menu-context "true"
                              :on-click stop-event!}
-       [:div {:class (str "stack-row" (when selected-row? " focus-row"))
-              :data-testid (when selected-row? "focus-row")}
-        [node-button-view instance
-         path
-         node
-         selected-row?
-         "stack-button"
-         (str "stack-node-" (path-id path))
-         "stack"]
-        [menu-toggle-view instance path selected-row?]]
+       [stack-row-content-view instance path node selected-row?]
        [action-menu-view instance shell-state]]
-      [:div {:class (str "stack-row" (when selected-row? " focus-row"))
-             :data-testid (when selected-row? "focus-row")}
-       [node-button-view instance
-        path
-        node
-        selected-row?
-        "stack-button"
-        (str "stack-node-" (path-id path))
-        "stack"]
-       [menu-toggle-view instance path selected-row?]])))
+      [stack-row-content-view instance path node selected-row?])))
 
 (defn- stack-view [instance shell-state]
   (let [domain-state (:domain shell-state)

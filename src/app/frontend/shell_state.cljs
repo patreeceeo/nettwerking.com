@@ -1,6 +1,10 @@
 (ns app.frontend.shell-state
   (:require [app.core.editor :as editor]))
 
+(def closed-menu-state
+  {:open? false
+   :action-index 0})
+
 (def menu-items-by-action-id
   {:insert-literal
    [{:id :insert-literal-3
@@ -137,8 +141,7 @@
    (normalize-shell-state {:domain domain-state
                            :expanded-path (or expanded-path (default-expanded-path domain-state))
                            :stack-open? true
-                           :menu {:open? false
-                                  :action-index 0}})))
+                           :menu closed-menu-state})))
 
 (defn state->snapshot [shell-state]
   {:root (get-in shell-state [:domain :root])
@@ -147,22 +150,24 @@
    :stack-open? (:stack-open? shell-state)})
 
 (defn close-menu [shell-state]
-  (assoc shell-state :menu {:open? false :action-index 0}))
+  (assoc shell-state :menu closed-menu-state))
 
 (defn- select-path [domain-state path]
   (editor/apply-command domain-state {:type :select
                                       :path path}))
+
+(defn- select-shell-path [shell-state path]
+  (assoc shell-state :domain (select-path (:domain shell-state) path)))
 
 (defn- expandable-node-path? [shell-state path]
   (seq (editor/node-args (editor/node-at-path (get-in shell-state [:domain :root]) path))))
 
 (defn expand-stack-node [shell-state path]
   (if (expandable-node-path? shell-state path)
-    (-> shell-state
-        (assoc :domain (select-path (:domain shell-state) path))
+    (-> (select-shell-path shell-state path)
         (assoc :expanded-path path)
         (assoc :stack-open? true)
-        (assoc :menu {:open? false :action-index 0}))
+        close-menu)
     shell-state))
 
 (defn toggle-breadcrumb-expansion [shell-state path]
@@ -172,11 +177,10 @@
         target-stack-open? (if same-path?
                              (not (:stack-open? shell-state))
                              true)]
-    (-> shell-state
-        (assoc :domain (select-path (:domain shell-state) path))
+    (-> (select-shell-path shell-state path)
         (assoc :expanded-path target-expanded-path)
         (assoc :stack-open? target-stack-open?)
-        (assoc :menu {:open? false :action-index 0}))))
+        close-menu)))
 
 (defn toggle-menu-for-path [shell-state path]
   (let [same-selection? (= path (get-in shell-state [:domain :selection]))
@@ -184,7 +188,7 @@
         breadcrumb-path? (breadcrumb-selection? (:expanded-path shell-state) path)
         shell-state (if same-selection?
                       shell-state
-                      (assoc shell-state :domain (select-path (:domain shell-state) path)))
+                      (select-shell-path shell-state path))
         open? (and same-selection? (get-in shell-state [:menu :open?]))
         opening? (not open?)]
     (cond-> shell-state
@@ -193,13 +197,12 @@
              :stack-open? true)
 
       true
-      (assoc :menu {:open? opening?
-                    :action-index 0}))))
+      (assoc :menu (assoc closed-menu-state :open? opening?)))))
 
 (defn apply-domain-command [shell-state command]
   (-> shell-state
       (assoc :domain (editor/apply-command (:domain shell-state) command))
-      (assoc :menu {:open? false :action-index 0})))
+      close-menu))
 
 (defn activate-menu-action [shell-state action-id]
   (if-let [{:keys [command]} (first (filter #(= action-id (:id %))
@@ -264,8 +267,6 @@
                       :stack (stack-move-target shell-state direction)
                       :breadcrumb (breadcrumb-move-target shell-state direction)
                       nil)]
-      (-> shell-state
-          (assoc :domain (select-path (:domain shell-state) target))
-          (assoc :menu {:open? false
-                        :action-index 0}))
+      (-> (select-shell-path shell-state target)
+          close-menu)
       shell-state)))

@@ -9,6 +9,12 @@
 
 (defonce failure-events (atom []))
 
+(def empty-summary
+  {:test 0
+   :pass 0
+   :fail 0
+   :error 0})
+
 (defn- summary-text [{:keys [test pass fail error]}]
   (str "Ran " (or test 0) " tests with "
        (or pass 0) " passes, "
@@ -67,7 +73,7 @@
     (set-status! (if (ct/successful? event) "passed" "failed") event)
 
     :begin-run-tests
-    (set-status! "running" {:test 0 :pass 0 :fail 0 :error 0})
+    (set-status! "running" empty-summary)
 
     nil))
 
@@ -75,7 +81,7 @@
   (-> (env/get-test-data)
       (env/reset-test-data!))
   (reset! failure-events [])
-  (set-status! "running" {:test 0 :pass 0 :fail 0 :error 0})
+  (set-status! "running" empty-summary)
   (st/run-all-tests {:report-fn report!}))
 
 (defn stop [done]
