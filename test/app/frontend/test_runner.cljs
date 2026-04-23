@@ -82,8 +82,6 @@
   (done))
 
 (defn ^:export init []
-  (when-not (.getElementById js/document "frontend-test-status")
-    (dom/append [:div#frontend-test-status]))
   (start))
 
 (set! shadow.test.browser/init init)
