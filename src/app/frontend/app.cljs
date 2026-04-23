@@ -457,7 +457,7 @@
                     persist-delay-ms default-persist-delay-ms}}]
    (unmount-shell!)
    (let [snapshot (load-snapshot storage storage-key)
-         domain-state (editor/restore-state snapshot)
+         domain-state (editor/restore-snapshot snapshot)
          expanded-path (when (map? snapshot)
                          (:expanded-path snapshot))
          ;; The shell persists UI-only expansion state separately from the

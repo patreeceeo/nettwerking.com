@@ -20,22 +20,22 @@
     (is (true? (:enabled? (:insert-literal actions))))
     (is (false? (:enabled? (:wrap-selected actions))))))
 
-(deftest restore-state-handles-valid-and-invalid-snapshots
+(deftest restore-snapshot-handles-valid-and-invalid-snapshots
   (testing "a valid snapshot is restored"
     (let [snapshot {:root (editor/call-node
                            '+
                            [(editor/literal-node 2)
                             (editor/literal-node 3)])
                     :selection [:args 0]}
-          state (editor/restore-state snapshot)]
+          state (editor/restore-snapshot snapshot)]
       (is (= :restored (get-in state [:status :kind])))
       (is (= :restored (get-in state [:storage :kind])))
       (is (= [:args 0] (:selection state)))
       (is (= :success (get-in state [:eval :kind])))))
   (testing "an invalid snapshot falls back safely"
-    (let [state (editor/restore-state {:root {:type :call
-                                              :fn "+"
-                                              :args {:bad true}}})]
+    (let [state (editor/restore-snapshot {:root {:type :call
+                                                 :fn "+"
+                                                 :args {:bad true}}})]
       (is (= :error (get-in state [:status :kind])))
       (is (= :invalid-saved-state (get-in state [:status :reason])))
       (is (= :recovered (get-in state [:storage :kind])))
@@ -46,7 +46,7 @@
                            [(editor/literal-node 2)
                             (editor/literal-node 3)])
                     :selection [:args 4]}
-          state (editor/restore-state snapshot)]
+          state (editor/restore-snapshot snapshot)]
       (is (= :error (get-in state [:status :kind])))
       (is (= :invalid-saved-selection (get-in state [:status :reason])))
       (is (= [] (:selection state)))

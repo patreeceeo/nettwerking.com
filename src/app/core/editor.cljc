@@ -33,7 +33,7 @@
    :fn fn-symbol
    :args (vec args)})
 
-(defn node-args
+(defn node-children
   "Returns the child nodes that should be treated as structural descendants."
   [node]
   (if (= :call (:type node))
@@ -97,7 +97,7 @@
 (defn- ordered-child-paths [root path]
   (let [node (node-at-path root path)]
     (mapv (fn [index] (conj path :args index))
-          (range (count (node-args node))))))
+          (range (count (node-children node))))))
 
 (defn parent-path
   "Returns the parent node path for a child path, or nil at the root."
@@ -195,7 +195,7 @@
                          :reason :starter-task}
                 :storage-kind :fresh}))
 
-(defn restore-state
+(defn restore-snapshot
   "Restores editor state from a persisted snapshot, recovering safely on invalid data."
   [snapshot]
   (cond

@@ -70,7 +70,7 @@
   "Returns the immediate child paths shown in the current one-level stack view."
   [root expanded-path]
   (mapv (fn [index] (conj expanded-path :args index))
-        (range (count (editor/node-args (editor/node-at-path root expanded-path))))))
+        (range (count (editor/node-children (editor/node-at-path root expanded-path))))))
 
 (defn default-expanded-path
   "Chooses the initial expanded node based on the current selection."
@@ -189,7 +189,7 @@
   (assoc shell-state :domain (select-path (:domain shell-state) path)))
 
 (defn- expandable-node-path? [shell-state path]
-  (seq (editor/node-args (editor/node-at-path (get-in shell-state [:domain :root]) path))))
+  (seq (editor/node-children (editor/node-at-path (get-in shell-state [:domain :root]) path))))
 
 (defn expand-stack-node
   "Expands a stack child into the new breadcrumb endpoint when it has children."

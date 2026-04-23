@@ -32,7 +32,7 @@
     :message message
     :node-path path}))
 
-(defn builtin-ref
+(defn builtin-value
   "Builds the value representation returned when a builtin symbol is resolved."
   [name]
   {:type :builtin
@@ -104,7 +104,7 @@
         (malformed-node path)
 
         (builtins-entry builtins (symbol name))
-        (success (builtin-ref name) path)
+        (success (builtin-value name) path)
 
         :else
         (error-result :unknown-symbol "This function does not exist yet." path)))
