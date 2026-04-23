@@ -9,6 +9,8 @@
 .rebel_readline_history
 .gstack/
 node_modules
+.lsp
+
 
 # Produced by nix build
 result
