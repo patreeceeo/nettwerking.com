@@ -1,6 +1,7 @@
 (ns app.core.evaluator)
 
 (defn success
+  "Builds a successful evaluation result, optionally annotated with a node path."
   ([value]
    {:kind :success
     :value value})
@@ -10,6 +11,7 @@
     :node-path path}))
 
 (defn partial-result
+  "Builds a partial evaluation result for incomplete expressions."
   ([reason]
    {:kind :partial
     :reason reason})
@@ -19,6 +21,7 @@
     :node-path path}))
 
 (defn error-result
+  "Builds a structured evaluation error, optionally annotated with a node path."
   ([reason message]
    {:kind :error
     :reason reason
@@ -29,11 +32,14 @@
     :message message
     :node-path path}))
 
-(defn builtin-ref [name]
+(defn builtin-ref
+  "Builds the value representation returned when a builtin symbol is resolved."
+  [name]
   {:type :builtin
    :name name})
 
 (def default-builtins
+  "The builtin function table available to the MVP evaluator."
   {'+ {:name "+"
        :min-arity 2
        :validate-args (fn [args]
@@ -141,7 +147,9 @@
                            (mapv :value arg-results)
                            path)))))))
 
-(defn evaluate-node [node path builtins]
+(defn evaluate-node
+  "Evaluates a single node within a tree using the supplied builtin table."
+  [node path builtins]
   (if-not (map? node)
     (malformed-node path)
     (case (:type node)
@@ -149,6 +157,7 @@
       (evaluate-leaf node path builtins))))
 
 (defn evaluate
+  "Evaluates a root expression with either the default or supplied builtins."
   ([root]
    (evaluate root default-builtins))
   ([root builtins]

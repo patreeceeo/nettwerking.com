@@ -6,9 +6,15 @@
             [reagent.dom :as rdom]
             [clojure.string :as string]))
 
-(def default-storage-key "live-core-editor-state")
-(def default-persist-delay-ms 75)
+(def default-storage-key
+  "The localStorage key used for persisted editor sessions."
+  "live-core-editor-state")
 
+(def default-persist-delay-ms
+  "The default debounce delay for writing shell snapshots to storage."
+  75)
+
+;; Holds the mounted frontend instance so tests and reloads can inspect or tear it down.
 (defonce current-instance (atom nil))
 
 (defn- path-id [path]
@@ -28,6 +34,8 @@
 (declare node-text)
 
 (defn- displayed-node [node]
+  ;; The rendered tree is intentionally Lisp-like even though call nodes keep a
+  ;; separate :fn field in the underlying AST.
   (if (= :call (:type node))
     (if-let [fn-symbol (editor/call-fn-symbol node)]
       (editor/symbol-node (name fn-symbol))
@@ -141,6 +149,8 @@
         after (shell/normalize-shell-state (update-fn before))
         changed? (not= before after)]
     (when changed?
+      ;; Every UI transition flows through shell normalization so selection,
+      ;; expansion, and menu state stay in sync before the next render.
       (reset! (:state instance) after)
       (r/flush)
       (when persist?
@@ -397,13 +407,19 @@
        [stack-view instance shell-state]]
       [status-panel-view shell-state]]]))
 
-(defn render! [instance]
+(defn render!
+  "Renders the frontend shell into the instance container."
+  [instance]
   (rdom/render [app-root instance] (:container instance)))
 
-(defn current-state []
+(defn current-state
+  "Returns the current editor domain state for debugging and browser tests."
+  []
   (some-> @current-instance :state deref :domain))
 
-(defn current-shell-state []
+(defn current-shell-state
+  "Returns the full UI shell state for debugging and browser tests."
+  []
   (some-> @current-instance :state deref))
 
 (defn- attach-events! [instance]
@@ -417,7 +433,9 @@
            :handle-document-click handle-document-click
            :handle-document-keydown handle-document-keydown)))
 
-(defn unmount-shell! []
+(defn unmount-shell!
+  "Unmounts the frontend shell and removes any document-level listeners."
+  []
   (when-let [{:keys [container handle-document-click handle-document-keydown timeout-id]} @current-instance]
     (when-let [timeout @timeout-id]
       (js/clearTimeout timeout)
@@ -430,6 +448,7 @@
     (reset! current-instance nil)))
 
 (defn mount-shell!
+  "Mounts the frontend shell into container with optional storage overrides."
   ([container]
    (mount-shell! container {}))
   ([container {:keys [storage storage-key persist-delay-ms]
@@ -441,6 +460,8 @@
          domain-state (editor/restore-state snapshot)
          expanded-path (when (map? snapshot)
                          (:expanded-path snapshot))
+         ;; The shell persists UI-only expansion state separately from the
+         ;; editor domain so restore needs to rehydrate both layers.
          shell-state (assoc (shell/initial-shell-state domain-state expanded-path)
                             :stack-open? (if (and (map? snapshot)
                                                   (contains? snapshot :stack-open?))
@@ -456,9 +477,13 @@
      (reset! current-instance instance)
      instance)))
 
-(defn init []
+(defn init
+  "Bootstraps the frontend app when the page container exists."
+  []
   (when-let [container (.getElementById js/document "app")]
     (mount-shell! container)))
 
-(defn ^:dev/after-load reload []
+(defn ^:dev/after-load reload
+  "Hot-reload entry point for the frontend shell."
+  []
   (init))

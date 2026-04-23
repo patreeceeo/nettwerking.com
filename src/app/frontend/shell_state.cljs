@@ -2,10 +2,12 @@
   (:require [app.core.editor :as editor]))
 
 (def closed-menu-state
+  "The canonical closed state for the node action menu."
   {:open? false
    :action-index 0})
 
 (def menu-items-by-action-id
+  "Frontend-only menu presentation keyed by domain action id."
   {:insert-literal
    [{:id :insert-literal-3
      :label "Insert 3"
@@ -49,7 +51,9 @@
      :testid "action-delete"
      :command {:type :delete-selected}}]})
 
-(defn parent-paths-inclusive [path]
+(defn parent-paths-inclusive
+  "Returns a path plus each of its parents, ordered from root to the path itself."
+  [path]
   (loop [current path
          paths ()]
     (if (nil? current)
@@ -57,27 +61,39 @@
       (recur (editor/parent-path current)
              (conj paths current)))))
 
-(defn breadcrumb-paths [expanded-path]
+(defn breadcrumb-paths
+  "Returns the breadcrumb trail for the currently expanded node."
+  [expanded-path]
   (parent-paths-inclusive expanded-path))
 
-(defn stack-child-paths [root expanded-path]
+(defn stack-child-paths
+  "Returns the immediate child paths shown in the current one-level stack view."
+  [root expanded-path]
   (mapv (fn [index] (conj expanded-path :args index))
         (range (count (editor/node-args (editor/node-at-path root expanded-path))))))
 
-(defn default-expanded-path [domain-state]
+(defn default-expanded-path
+  "Chooses the initial expanded node based on the current selection."
+  [domain-state]
   (let [selection (:selection domain-state)]
     (cond
       (not (editor/valid-node-path? (:root domain-state) selection)) []
       (empty? selection) []
       :else (or (editor/parent-path selection) selection))))
 
-(defn breadcrumb-selection? [expanded-path selection]
+(defn breadcrumb-selection?
+  "True when selection is visible in the breadcrumb trail."
+  [expanded-path selection]
   (some #(= selection %) (breadcrumb-paths expanded-path)))
 
-(defn stack-selection? [expanded-path selection]
+(defn stack-selection?
+  "True when selection is one of the immediate children of the expanded node."
+  [expanded-path selection]
   (= expanded-path (editor/parent-path selection)))
 
-(defn selection-region [shell-state]
+(defn selection-region
+  "Classifies the selected node as breadcrumb, stack, or hidden."
+  [shell-state]
   (let [selection (get-in shell-state [:domain :selection])
         expanded-path (:expanded-path shell-state)]
     (cond
@@ -85,13 +101,17 @@
       (stack-selection? expanded-path selection) :stack
       :else :hidden)))
 
-(defn available-menu-actions [shell-state]
+(defn available-menu-actions
+  "Expands enabled domain actions into concrete frontend menu items."
+  [shell-state]
   (->> (get-in shell-state [:domain :available-actions :actions])
        (filter :enabled?)
        (mapcat #(get menu-items-by-action-id (:id %)))
        vec))
 
-(defn current-menu-action [shell-state]
+(defn current-menu-action
+  "Returns the currently highlighted menu item, if any."
+  [shell-state]
   (nth (available-menu-actions shell-state)
        (get-in shell-state [:menu :action-index] 0)
        nil))
@@ -123,18 +143,23 @@
     (assoc shell-state :menu {:open? open?
                               :action-index action-index})))
 
-(defn normalize-shell-state [shell-state]
+(defn normalize-shell-state
+  "Repairs shell state after any transition so selection, expansion, and menu state stay coherent."
+  [shell-state]
   (let [domain-state (:domain shell-state)
         expanded-path (normalize-expanded-path domain-state (:expanded-path shell-state))
         stack-open? (if (contains? shell-state :stack-open?)
                       (:stack-open? shell-state)
                       true)]
+    ;; The shell adds UI-only state on top of the editor domain, so every
+    ;; transition is normalized through one path before rendering.
     (-> shell-state
         (assoc :expanded-path expanded-path)
         (assoc :stack-open? stack-open?)
         normalize-menu)))
 
 (defn initial-shell-state
+  "Builds the UI shell state that wraps an editor domain state."
   ([domain-state]
    (initial-shell-state domain-state nil))
   ([domain-state expanded-path]
@@ -143,13 +168,17 @@
                            :stack-open? true
                            :menu closed-menu-state})))
 
-(defn state->snapshot [shell-state]
+(defn state->snapshot
+  "Serializes the persistable portion of shell state."
+  [shell-state]
   {:root (get-in shell-state [:domain :root])
    :selection (get-in shell-state [:domain :selection])
    :expanded-path (:expanded-path shell-state)
    :stack-open? (:stack-open? shell-state)})
 
-(defn close-menu [shell-state]
+(defn close-menu
+  "Closes the node action menu and resets its highlighted item."
+  [shell-state]
   (assoc shell-state :menu closed-menu-state))
 
 (defn- select-path [domain-state path]
@@ -162,7 +191,9 @@
 (defn- expandable-node-path? [shell-state path]
   (seq (editor/node-args (editor/node-at-path (get-in shell-state [:domain :root]) path))))
 
-(defn expand-stack-node [shell-state path]
+(defn expand-stack-node
+  "Expands a stack child into the new breadcrumb endpoint when it has children."
+  [shell-state path]
   (if (expandable-node-path? shell-state path)
     (-> (select-shell-path shell-state path)
         (assoc :expanded-path path)
@@ -170,7 +201,9 @@
         close-menu)
     shell-state))
 
-(defn toggle-breadcrumb-expansion [shell-state path]
+(defn toggle-breadcrumb-expansion
+  "Selects a breadcrumb node and toggles whether its child stack is visible."
+  [shell-state path]
   (let [expanded-path (:expanded-path shell-state)
         same-path? (= path expanded-path)
         target-expanded-path (if same-path? expanded-path path)
@@ -182,7 +215,9 @@
         (assoc :stack-open? target-stack-open?)
         close-menu)))
 
-(defn toggle-menu-for-path [shell-state path]
+(defn toggle-menu-for-path
+  "Opens or closes the action menu for a visible node path."
+  [shell-state path]
   (let [same-selection? (= path (get-in shell-state [:domain :selection]))
         same-expanded-path? (= path (:expanded-path shell-state))
         breadcrumb-path? (breadcrumb-selection? (:expanded-path shell-state) path)
@@ -199,18 +234,24 @@
       true
       (assoc :menu (assoc closed-menu-state :open? opening?)))))
 
-(defn apply-domain-command [shell-state command]
+(defn apply-domain-command
+  "Applies an editor-domain command and closes any open menu."
+  [shell-state command]
   (-> shell-state
       (assoc :domain (editor/apply-command (:domain shell-state) command))
       close-menu))
 
-(defn activate-menu-action [shell-state action-id]
+(defn activate-menu-action
+  "Runs the command attached to a menu item when that item exists."
+  [shell-state action-id]
   (if-let [{:keys [command]} (first (filter #(= action-id (:id %))
                                             (available-menu-actions shell-state)))]
     (apply-domain-command shell-state command)
     shell-state))
 
-(defn step-menu-selection [shell-state offset]
+(defn step-menu-selection
+  "Moves the highlighted menu item by offset while clamping to the menu bounds."
+  [shell-state offset]
   (let [actions (available-menu-actions shell-state)
         max-index (max 0 (dec (count actions)))]
     (assoc-in shell-state [:menu :action-index]
@@ -257,7 +298,9 @@
       (:down :right) (breadcrumb-child-path shell-state)
       nil)))
 
-(defn move-selection [shell-state direction]
+(defn move-selection
+  "Moves either node selection or menu selection, depending on whether the menu is open."
+  [shell-state direction]
   (if (get-in shell-state [:menu :open?])
     (case direction
       (:up :left) (step-menu-selection shell-state -1)

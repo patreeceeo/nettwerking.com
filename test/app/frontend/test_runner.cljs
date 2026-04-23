@@ -10,6 +10,7 @@
 (defonce failure-events (atom []))
 
 (def empty-summary
+  "The zeroed summary reported before any browser tests complete."
   {:test 0
    :pass 0
    :fail 0
@@ -77,17 +78,23 @@
 
     nil))
 
-(defn start []
+(defn start
+  "Resets browser test state and runs the full frontend test suite."
+  []
   (-> (env/get-test-data)
       (env/reset-test-data!))
   (reset! failure-events [])
   (set-status! "running" empty-summary)
   (st/run-all-tests {:report-fn report!}))
 
-(defn stop [done]
+(defn stop
+  "Required shadow-cljs stop hook for the browser test runner."
+  [done]
   (done))
 
-(defn ^:export init []
+(defn ^:export init
+  "Bootstraps the browser test runner inside the compiled test page."
+  []
   (start))
 
 (set! shadow.test.browser/init init)

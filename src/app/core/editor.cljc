@@ -2,39 +2,52 @@
   (:require [app.core.evaluator :as evaluator]))
 
 (def starter-task
+  "The onboarding task shown when the editor starts from a fresh state."
   {:id :starter-sum
    :title "Make (+ 2 3)."
    :description "Finish the starter expression by adding one more number."})
 
-(defn literal-node [value]
+(defn literal-node
+  "Builds a literal AST node."
+  [value]
   {:type :literal
    :value value})
 
-(defn symbol-node [name]
+(defn symbol-node
+  "Builds a symbol AST node from a display name."
+  [name]
   {:type :symbol
    :name name})
 
 (defn hole-node
+  "Builds a placeholder node that represents an incomplete expression."
   ([] (hole-node "add value"))
   ([label]
    {:type :hole
     :label label}))
 
-(defn call-node [fn-symbol args]
+(defn call-node
+  "Builds a call node whose function position is stored separately from its args."
+  [fn-symbol args]
   {:type :call
    :fn fn-symbol
    :args (vec args)})
 
-(defn node-args [node]
+(defn node-args
+  "Returns the child nodes that should be treated as structural descendants."
+  [node]
   (if (= :call (:type node))
     (vec (:args node))
     []))
 
-(defn call-fn-symbol [node]
+(defn call-fn-symbol
+  "Returns the function symbol stored in a call node, or nil for other nodes."
+  [node]
   (when (= :call (:type node))
     (:fn node)))
 
 (def starter-root
+  "The starter expression used for first-run onboarding."
   (call-node
    '+
    [(literal-node 2)
@@ -42,7 +55,9 @@
 
 (declare valid-node-tree?)
 
-(defn valid-node-tree? [node]
+(defn valid-node-tree?
+  "True when the given value is a structurally valid editor AST."
+  [node]
   (and (map? node)
        (case (:type node)
          :literal (contains? node :value)
@@ -53,12 +68,16 @@
                     (every? valid-node-tree? (:args node)))
          false)))
 
-(defn node-at-path [root path]
+(defn node-at-path
+  "Returns the node located at a structural path within root."
+  [root path]
   (if (empty? path)
     root
     (get-in root path)))
 
-(defn valid-node-path? [root path]
+(defn valid-node-path?
+  "True when path addresses an existing node in root."
+  [root path]
   (and (vector? path)
        (loop [node root
               path path]
@@ -80,7 +99,9 @@
     (mapv (fn [index] (conj path :args index))
           (range (count (node-args node))))))
 
-(defn parent-path [path]
+(defn parent-path
+  "Returns the parent node path for a child path, or nil at the root."
+  [path]
   (when (and (integer? (peek path))
              (>= (count path) 2)
              (= :args (nth path (- (count path) 2))))
@@ -107,7 +128,9 @@
    :enabled? enabled?
    :reason reason})
 
-(defn available-actions [{:keys [root selection]}]
+(defn available-actions
+  "Computes the command affordances for the current selection."
+  [{:keys [root selection]}]
   (if-not (valid-node-path? root selection)
     {:selection-valid? false
      :actions [(action :insert-literal false :reason :invalid-selection)
@@ -153,6 +176,8 @@
 (defn- build-state [root selection {:keys [status storage-kind]}]
   (let [normalized-selection (if (valid-node-path? root selection) selection [])
         evaluation (evaluator/evaluate root)
+        ;; Keep derived data in one place so command application cannot return
+        ;; a tree, selection, and result that disagree with each other.
         state {:task starter-task
                :root root
                :selection normalized-selection
@@ -161,14 +186,18 @@
                :storage {:kind storage-kind}}]
     (assoc state :available-actions (available-actions state))))
 
-(defn initial-state []
+(defn initial-state
+  "Builds the default editor state for a first-run session."
+  []
   (build-state starter-root
                [:args 1]
                {:status {:kind :first-run
                          :reason :starter-task}
                 :storage-kind :fresh}))
 
-(defn restore-state [snapshot]
+(defn restore-state
+  "Restores editor state from a persisted snapshot, recovering safely on invalid data."
+  [snapshot]
   (cond
     (nil? snapshot)
     (initial-state)
@@ -239,7 +268,9 @@
                          :reason reason}
                 :storage-kind (get-in state [:storage :kind])}))
 
-(defn apply-command [state command]
+(defn apply-command
+  "Applies an editor command and returns the next fully derived domain state."
+  [state command]
   (let [{:keys [root selection]} state
         command-type (:type command)]
     (cond
