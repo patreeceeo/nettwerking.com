@@ -82,13 +82,19 @@
       (error-result :wrong-arity "This function has too many arguments." path)
 
       :else
-      (if-let [{:keys [reason message]} (and validate-args
-                                             (validate-args arg-values))]
-        (error-result reason message path)
-        (try
-          (success (apply arg-values) path)
-          (catch #?(:clj Throwable :cljs :default) _error
-            (error-result :apply-failed "This expression could not be evaluated." path)))))))
+      (let [validation-error (when validate-args
+                               (try
+                                 (validate-args arg-values)
+                                 (catch #?(:clj Throwable :cljs :default) error
+                                   {:reason :validate-failed
+                                    :message (or (ex-message error)
+                                                 "This expression could not be validated.")})))]
+        (if-let [{:keys [reason message]} validation-error]
+          (error-result reason message path)
+          (try
+            (success (apply arg-values) path)
+            (catch #?(:clj Throwable :cljs :default) _error
+              (error-result :apply-failed "This expression could not be evaluated." path))))))))
 
 (defn- evaluate-leaf [node path builtins]
   (case (:type node)

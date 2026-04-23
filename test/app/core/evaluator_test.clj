@@ -104,3 +104,20 @@
              'boom
              [])
             throwing-builtins)))))
+
+(deftest catches-throwing-validators
+  (let [throwing-builtins {'boom {:name "boom"
+                                  :min-arity 1
+                                  :validate-args (fn [_args]
+                                                   (throw (ex-info "validator kaboom" {})))
+                                  :apply (fn [_args]
+                                           :unreachable)}}]
+    (is (= {:kind :error
+            :reason :validate-failed
+            :message "validator kaboom"
+            :node-path []}
+           (evaluator/evaluate
+            (editor/call-node
+             'boom
+             [(editor/literal-node 1)])
+            throwing-builtins)))))
