@@ -238,7 +238,6 @@
               :data-node-region region
               :data-testid testid
               :data-selected (if selected? "true" "false")
-              :tab-index -1
               :aria-label aria-label
               :on-click on-click}
      [node-token-view node]]))
@@ -248,7 +247,6 @@
             :class (str "menu-toggle" (when selected? " selected-toggle"))
             :data-menu-toggle "true"
             :data-testid (str "menu-toggle-" (path-id path))
-            :tab-index -1
             :aria-label "Open actions"
             :on-click (fn [event]
                         (stop-event! event)
@@ -266,7 +264,6 @@
                            :data-action-id (name id)
                            :data-testid testid
                            :data-action-selected (if (= id selected-action-id) "true" "false")
-                           :tab-index -1
                            :on-click (fn [event]
                                        (stop-event! event)
                                        (activate-menu-action! instance id))}
