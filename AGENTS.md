@@ -12,6 +12,7 @@ Consider the following for every code change.
     * Use docstrings and comments for anything that still isn't obvious
 8. Explicit dependencies. Add binary deps to flake.nix and Java/Clojure deps to the appropriate file.
 9. Beware of null/nil/None, the "billion dollar mistake"! Favor monads like Result, and more descriptive monads like Artist = (Specified string | Unspecified) over generic ones like Maybe.
+10. Focus. Never do more than one thing at a time. If it's not relevant to the task at hand, don't do it.
 
 ## Skill routing
 

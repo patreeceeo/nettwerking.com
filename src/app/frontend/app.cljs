@@ -14,8 +14,16 @@
   "The default debounce delay for writing shell snapshots to storage."
   75)
 
+(def ^:private body-menu-open-class
+  "The body class used to disable page scrolling while the action sheet is open."
+  "menu-open")
+
 ;; Holds the mounted frontend instance so tests and reloads can inspect or tear it down.
 (defonce current-instance (atom nil))
+
+(declare sync-menu-presentation!)
+(declare sync-selected-menu-action-visibility!)
+(declare schedule-selected-menu-action-visibility!)
 
 (defn- path-id [path]
   (if (empty? path)
@@ -180,6 +188,9 @@
       (when (and after-editing-path
                  (not= before-editing-path after-editing-path))
         (focus-editing-node! instance))
+      (sync-menu-presentation! instance)
+      (sync-selected-menu-action-visibility! instance)
+      (schedule-selected-menu-action-visibility! instance)
       (when persist?
         (schedule-persist! instance)))))
 
@@ -209,6 +220,46 @@
 
 (defn- commit-editing! [instance persist?]
   (update-shell! instance shell/commit-editing persist?))
+
+(defn- set-body-menu-open! [open?]
+  (let [class-list (.-classList (.-body js/document))]
+    (if open?
+      (.add class-list body-menu-open-class)
+      (.remove class-list body-menu-open-class))))
+
+(defn- sync-menu-presentation! [instance]
+  (set-body-menu-open! (get-in @(:state instance) [:menu :open?])))
+
+(defn- sync-selected-menu-action-visibility! [instance]
+  (when (get-in @(:state instance) [:menu :open?])
+    (when-let [container (.querySelector (:container instance) "[data-testid='action-menu-items']")]
+      (when-let [selected (.querySelector container "[data-action-selected='true']")]
+        (let [previous (.-previousElementSibling selected)
+              next (.-nextElementSibling selected)
+              container-rect (.getBoundingClientRect container)
+              min-rect (if previous
+                         (.getBoundingClientRect previous)
+                         (.getBoundingClientRect selected))
+              max-rect (if next
+                         (.getBoundingClientRect next)
+                         (.getBoundingClientRect selected))]
+          (cond
+            (< (.-top min-rect) (.-top container-rect))
+            (set! (.-scrollTop container)
+                  (+ (.-scrollTop container)
+                     (- (.-top min-rect) (.-top container-rect))))
+
+            (> (.-bottom max-rect) (.-bottom container-rect))
+            (set! (.-scrollTop container)
+                  (+ (.-scrollTop container)
+                     (- (.-bottom max-rect) (.-bottom container-rect))))
+
+            :else nil))))))
+
+(defn- schedule-selected-menu-action-visibility! [instance]
+  (js/requestAnimationFrame
+   (fn [_timestamp]
+     (sync-selected-menu-action-visibility! instance))))
 
 (defn- movement-direction [key]
   (case key
@@ -256,6 +307,12 @@
       (do
         (.preventDefault event)
         (toggle-menu-for-path! instance (get-in shell-state [:domain :selection])))
+
+      (and (= "Escape" (.-key event))
+           (get-in @(:state instance) [:menu :open?]))
+      (do
+        (.preventDefault event)
+        (close-menu! instance))
 
       (= " " (.-key event))
       (when-not (get-in shell-state [:menu :open?])
@@ -350,14 +407,16 @@
                         ": "
                         (node-text node))
         editing-node? (= path (editing-path shell-state))
+        menu-open? (get-in @(:state instance) [:menu :open?])
         on-click (fn [event]
                    (stop-event! event)
                    (when (editing? @(:state instance))
                      (commit-editing! instance true))
-                   (case region
-                     "breadcrumb" (toggle-breadcrumb-expansion! instance path)
-                     "stack" (expand-stack-node! instance path)
-                     nil))]
+                   (when-not menu-open?
+                     (case region
+                       "breadcrumb" (toggle-breadcrumb-expansion! instance path)
+                       "stack" (expand-stack-node! instance path)
+                       nil)))]
     (if editing-node?
       [editing-node-view instance path node selected? extra-class testid]
       [:button {:type "button"
@@ -369,7 +428,7 @@
                 :data-selected (if selected? "true" "false")
                 :aria-label aria-label
                 :on-click on-click}
-       [node-token-view node]])))
+       [node-token-view node]]))
 
 (defn- menu-toggle-view [instance path selected?]
   [:button {:type "button"
@@ -381,12 +440,16 @@
                         (stop-event! event)
                         (when (editing? @(:state instance))
                           (commit-editing! instance true))
-                        (toggle-menu-for-path! instance path))}
+                        (let [menu-open? (get-in @(:state instance) [:menu :open?])
+                              selection (get-in @(:state instance) [:domain :selection])]
+                          (when (or (not menu-open?)
+                                    (= path selection))
+                            (toggle-menu-for-path! instance path))))}
    "⋯"])
 
 (defn- menu-items-view [instance shell-state]
   (let [selected-action-id (:id (shell/current-menu-action shell-state))]
-    (into [:<>]
+    (into [:div.action-menu-items {:data-testid "action-menu-items"}]
           (map (fn [{:keys [id label summary testid]}]
                  ^{:key (name id)}
                  [:button {:type "button"
@@ -404,11 +467,33 @@
                (shell/available-menu-actions shell-state)))))
 
 (defn- action-menu-view [instance shell-state]
-  [:div.action-menu {:data-testid "action-menu"
-                     :data-menu-context "true"
-                     :on-click stop-event!}
-   [:div.panel-heading "Actions"]
-   [menu-items-view instance shell-state]])
+  (let [selection (get-in shell-state [:domain :selection])
+        node (editor/node-at-path (get-in shell-state [:domain :root]) selection)]
+    [:section.action-menu {:data-testid "action-menu"
+                           :data-menu-context "true"
+                           :on-click stop-event!}
+     [:div.action-sheet-handle]
+     [:div.action-sheet-label "Actions for"]
+     [:div.action-sheet-title {:data-testid "action-menu-title"}
+      [:span (node-text node)]
+      " "
+      [:span.action-sheet-kind (node-kind-label node)]]
+     [menu-items-view instance shell-state]]))
+
+(defn- action-menu-overlay-view [instance shell-state]
+  (when (get-in shell-state [:menu :open?])
+    [:<>
+     [:button.menu-backdrop {:type "button"
+                             :data-testid "menu-backdrop"
+                             :aria-label "Close actions"
+                             :on-click (fn [event]
+                                         (stop-event! event)
+                                         (close-menu! instance))}]
+     [action-menu-view instance shell-state]]))
+
+(defn- menu-cutout-view [testid border-radius]
+  [:div.menu-cutout {:data-testid testid
+                     :style {:borderRadius border-radius}}])
 
 (defn- breadcrumb-item-view [instance shell-state path]
   (let [domain-state (:domain shell-state)
@@ -416,13 +501,18 @@
         selection (:selection domain-state)
         selected? (= selection path)
         expanded? (= expanded-path path)
+        selected-breadcrumb? (= :breadcrumb (shell/selection-region shell-state))
+        menu-open? (get-in shell-state [:menu :open?])
+        menu-target? (and menu-open? selected? selected-breadcrumb?)
         crumb-classes (cond-> ["breadcrumb-item"]
                         selected? (conj "selected-breadcrumb")
-                        expanded? (conj "expanded-breadcrumb"))
-        menu-open? (get-in shell-state [:menu :open?])
-        selected-breadcrumb? (= :breadcrumb (shell/selection-region shell-state))]
+                        expanded? (conj "expanded-breadcrumb")
+                        menu-target? (conj "menu-target"))]
     [:div {:class (string/join " " crumb-classes)
-           :data-menu-context (when (and menu-open? selected? selected-breadcrumb?) "true")}
+           :data-menu-context (when menu-target? "true")
+           :data-testid (str "breadcrumb-item-" (path-id path))}
+     (when menu-target?
+       [menu-cutout-view "menu-cutout" "999px"])
      [node-button-view instance
       shell-state
       path
@@ -434,25 +524,17 @@
      [menu-toggle-view instance path selected?]]))
 
 (defn- breadcrumbs-view [instance shell-state]
-  (let [expanded-path (:expanded-path shell-state)
-        selected-breadcrumb? (= :breadcrumb (shell/selection-region shell-state))
-        menu-open? (get-in shell-state [:menu :open?])]
-    [:<>
-     (into [:div.breadcrumbs {:data-testid "breadcrumbs"}]
-           (map-indexed
-            (fn [index path]
-              ^{:key (str "crumb-fragment-" (path-id path))}
-              [:<>
-               (when (pos? index)
-                 ^{:key (str "separator-" (path-id path))}
-                 [:span.breadcrumb-separator "→"])
-               [breadcrumb-item-view instance shell-state path]])
-            (shell/breadcrumb-paths expanded-path)))
-     (when (and selected-breadcrumb? menu-open?)
-       [:div.breadcrumb-focus {:data-menu-context "true"
-                               :data-testid "breadcrumb-focus"
-                               :on-click stop-event!}
-        [action-menu-view instance shell-state]])]))
+  (let [expanded-path (:expanded-path shell-state)]
+    (into [:div.breadcrumbs {:data-testid "breadcrumbs"}]
+          (map-indexed
+           (fn [index path]
+             ^{:key (str "crumb-fragment-" (path-id path))}
+             [:<>
+              (when (pos? index)
+                ^{:key (str "separator-" (path-id path))}
+                [:span.breadcrumb-separator "→"])
+              [breadcrumb-item-view instance shell-state path]])
+           (shell/breadcrumb-paths expanded-path)))))
 
 (defn- stack-row-content-view [instance shell-state path node selected-row?]
   [:div {:class (str "stack-row" (when selected-row? " focus-row"))
@@ -474,12 +556,13 @@
         selected-stack? (= :stack (shell/selection-region shell-state))
         menu-open? (and selected? selected-stack? (get-in shell-state [:menu :open?]))
         selected-row? (and selected? selected-stack?)]
-    (if menu-open?
-      [:div.stack-row-shell {:data-menu-context "true"
-                             :on-click stop-event!}
-       [stack-row-content-view instance shell-state path node selected-row?]
-       [action-menu-view instance shell-state]]
-      [stack-row-content-view instance shell-state path node selected-row?])))
+    [:div {:class (str "stack-row-shell" (when menu-open? " menu-target"))
+           :data-menu-context (when menu-open? "true")
+           :data-testid (str "stack-row-shell-" (path-id path))
+           :on-click (when menu-open? stop-event!)}
+     (when menu-open?
+       [menu-cutout-view "menu-cutout" "1.05rem"])
+     [stack-row-content-view instance shell-state path node selected-row?]]))
 
 (defn- stack-view [instance shell-state]
   (let [domain-state (:domain shell-state)
@@ -504,7 +587,6 @@
      [:div.status-kind {:data-testid "status-kind"} status-title]
      (when status-summary
        [:div.status-summary {:data-testid "status-summary"} status-summary])
-     [:div.result-value {:data-testid "result-value"} (result-copy domain-state)]
      [:div.status-live {:data-testid "status-live"
                         :aria-live "polite"}
       (if status-summary
@@ -518,17 +600,18 @@
          task-description :description} (:task domain-state)]
     [:main.editor-shell
      [:header.orientation-header
-      [:h1 {:data-testid "app-title"} "Live Core Editor"]
+      [:h1 {:data-testid "app-title"} "Edit structure, not strings, in nascent Lisp dialect"]
       [:p {:data-testid "starter-task"}
        [:strong task-title]
        " "
        task-description]]
      [:div.workspace-grid
       [:section.tree-panel {:aria-label "Focused tree editor"}
-       [:div.panel-heading "Focused Tree Editor"]
+       [:div.panel-heading "Code tree: Functions are parents, arguments are children."]
        [breadcrumbs-view instance shell-state]
        [stack-view instance shell-state]]
-      [status-panel-view shell-state]]]))
+       [status-panel-view shell-state]]
+     [action-menu-overlay-view instance shell-state]]))
 
 (defn render!
   "Renders the frontend shell into the instance container."
@@ -567,6 +650,7 @@
       (.removeEventListener js/document "click" handle-document-click))
     (when handle-document-keydown
       (.removeEventListener js/document "keydown" handle-document-keydown))
+    (set-body-menu-open! false)
     (rdom/unmount-component-at-node container)
     (reset! current-instance nil)))
 

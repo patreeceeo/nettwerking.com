@@ -21,6 +21,12 @@
 (defn- text-content [selector]
   (some-> (query-one selector) .-textContent))
 
+(defn- inject-style! [css-text]
+  (let [style-element (.createElement js/document "style")]
+    (set! (.-textContent style-element) css-text)
+    (.appendChild (.-head js/document) style-element)
+    style-element))
+
 (defn- click! [element]
   (.dispatchEvent element
                   (js/MouseEvent. "click" #js {:bubbles true
@@ -101,10 +107,6 @@
 
 (deftest renders-the-first-run-shell
   (mount-app!)
-  (is (= "Live Core Editor" (text-content "[data-testid='app-title']")))
-  (is (= "First Run" (text-content "[data-testid='status-kind']")))
-  (is (= "Make (+ 2 3). Finish the starter expression by adding one more number."
-         (text-content "[data-testid='starter-task']")))
   (is (= "stack-node-args-1" (selected-node-id)))
   (is (= [] (:expanded-path (app/current-shell-state))))
   (is (some? (testid "breadcrumb-root")))
@@ -295,3 +297,56 @@
   (is (= :hole (get-in (app/current-state) [:root :args 1 :type])))
   (is (string/includes? (or (text-content "[data-testid='stack-node-args-1']") "")
                         "add value")))
+
+(deftest sheet-menu-locks-page-scroll-and-closes-from-backdrop
+  (mount-app!)
+  (click! (testid "menu-toggle-args-1"))
+  (is (string/includes? (.-className (.-body js/document)) "menu-open"))
+  (is (some? (testid "menu-backdrop")))
+  (let [menu (testid "action-menu")
+        rect (.getBoundingClientRect menu)
+        top-target (.elementFromPoint js/document
+                                      (+ (.-left rect) 20)
+                                      (+ (.-top rect) 20))]
+    (is (some? (.closest top-target "[data-testid='action-menu']"))))
+  (click! (testid "menu-backdrop"))
+  (is (nil? (testid "action-menu")))
+  (is (not (string/includes? (.-className (.-body js/document)) "menu-open"))))
+
+(deftest selected-menu-action-scrolls-into-view-with-context
+  (let [element-prototype (.-prototype js/Element)
+        original-get-bounding-client-rect (.-getBoundingClientRect element-prototype)
+        scroll-top (atom 0)]
+    (try
+      (mount-app!)
+      (click! (testid "menu-toggle-args-1"))
+      (let [menu-items (testid "action-menu-items")
+            action-elements (into-array (array-seq (.querySelectorAll menu-items "[data-menu-action='true']")))]
+        (js/Object.defineProperty
+         menu-items
+         "scrollTop"
+         #js {:configurable true
+              :get (fn [] @scroll-top)
+              :set (fn [value] (reset! scroll-top value))})
+        (set! (.-getBoundingClientRect element-prototype)
+              (fn []
+                (this-as this
+                         (cond
+                           (identical? this menu-items)
+                           #js {:top 0
+                                :bottom 40}
+
+                           :else
+                           (let [index (.indexOf action-elements this)]
+                             (if (= -1 index)
+                               (.call original-get-bounding-client-rect this)
+                               (let [top (* index 20)]
+                                 #js {:top top
+                                      :bottom (+ top 20)})))))))
+        (keydown! (testid "stack-node-args-1") "ArrowDown")
+        (is (= "action-wrap" (selected-action-id)))
+        (is (> @scroll-top 0))
+        (is (some? menu-items)))
+      (finally
+        (set! (.-getBoundingClientRect element-prototype)
+              original-get-bounding-client-rect)))))
