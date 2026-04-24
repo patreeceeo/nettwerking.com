@@ -1,5 +1,7 @@
 (ns app.frontend.shell-state
-  (:require [app.core.editor :as editor]))
+  (:require [app.core.editor :as editor]
+            [cljs.tools.reader.edn :as edn]
+            [clojure.string :as string]))
 
 (def closed-menu-state
   "The canonical closed state for the node action menu."
@@ -9,32 +11,18 @@
 (def menu-items-by-action-id
   "Frontend-only menu presentation keyed by domain action id."
   {:insert-literal
-   [{:id :insert-literal-3
-     :label "Insert 3"
-     :summary "Replace the selected node with 3."
-     :testid "action-insert-literal-3"
-     :command {:type :insert-literal
-               :value 3}}
-    {:id :insert-literal-4
-     :label "Insert 4"
-     :summary "Replace the selected node with 4."
-     :testid "action-insert-literal-4"
-     :command {:type :insert-literal
-               :value 4}}]
+   [{:id :edit
+     :label "Edit"
+     :summary "Edit this node in place."
+     :testid "action-edit"
+     :transition :begin-editing}]
 
    :insert-symbol
-   [{:id :insert-symbol-plus
-     :label "Use +"
-     :summary "Replace the selected node with +."
-     :testid "action-insert-symbol-plus"
-     :command {:type :insert-symbol
-               :name "+"}}
-    {:id :insert-symbol-wat
-     :label "Use wat"
-     :summary "Replace the selected node with wat."
-     :testid "action-insert-symbol-wat"
-     :command {:type :insert-symbol
-               :name "wat"}}]
+   [{:id :edit
+     :label "Edit"
+     :summary "Edit this node in place."
+     :testid "action-edit"
+     :transition :begin-editing}]
 
    :wrap-selected
    [{:id :wrap-selected
@@ -50,6 +38,40 @@
      :summary "Replace the selected node with a hole."
      :testid "action-delete"
      :command {:type :delete-selected}}]})
+
+(defn- editing-node-text [node]
+  (case (:type node)
+    :literal (str (:value node))
+    :symbol (:name node)
+    :hole ""
+    :call (if-let [fn-symbol (editor/call-fn-symbol node)]
+            (name fn-symbol)
+            "")
+    ""))
+
+(defn- parse-edit-value [text]
+  (let [trimmed (string/trim text)]
+    (when (seq trimmed)
+      (try
+        (edn/read-string trimmed)
+        (catch :default _error
+          ::invalid-edit)))))
+
+(defn- replacement-node-for-edit [node text]
+  (let [value (parse-edit-value text)]
+    (cond
+      (or (nil? value) (= ::invalid-edit value))
+      nil
+
+      (= :call (:type node))
+      (when (symbol? value)
+        (editor/call-node value (editor/node-children node)))
+
+      (symbol? value)
+      (editor/symbol-node (name value))
+
+      :else
+      (editor/literal-node value))))
 
 (defn parent-paths-inclusive
   "Returns a path plus each of its parents, ordered from root to the path itself."
@@ -104,10 +126,19 @@
 (defn available-menu-actions
   "Expands enabled domain actions into concrete frontend menu items."
   [shell-state]
-  (->> (get-in shell-state [:domain :available-actions :actions])
-       (filter :enabled?)
-       (mapcat #(get menu-items-by-action-id (:id %)))
-       vec))
+  (let [enabled-actions (->> (get-in shell-state [:domain :available-actions :actions])
+                             (filter :enabled?)
+                             (mapcat #(get menu-items-by-action-id (:id %))))]
+    (->> enabled-actions
+         (reduce (fn [{:keys [seen items]} item]
+                   (if (contains? seen (:id item))
+                     {:seen seen :items items}
+                     {:seen (conj seen (:id item))
+                      :items (conj items item)}))
+                 {:seen #{}
+                  :items []})
+         :items
+         vec)))
 
 (defn current-menu-action
   "Returns the currently highlighted menu item, if any."
@@ -143,6 +174,19 @@
     (assoc shell-state :menu {:open? open?
                               :action-index action-index})))
 
+(defn- normalize-editing [shell-state]
+  (if-let [{:keys [path text]} (:editing shell-state)]
+    (let [domain-state (:domain shell-state)
+          selection (:selection domain-state)]
+      (if (and (string? text)
+               (= path selection)
+               (selection-visible? domain-state
+                                   (:expanded-path shell-state)
+                                   (:stack-open? shell-state)))
+        shell-state
+        (dissoc shell-state :editing)))
+    shell-state))
+
 (defn normalize-shell-state
   "Repairs shell state after any transition so selection, expansion, and menu state stay coherent."
   [shell-state]
@@ -156,7 +200,8 @@
     (-> shell-state
         (assoc :expanded-path expanded-path)
         (assoc :stack-open? stack-open?)
-        normalize-menu)))
+        normalize-menu
+        normalize-editing)))
 
 (defn initial-shell-state
   "Builds the UI shell state that wraps an editor domain state."
@@ -180,6 +225,51 @@
   "Closes the node action menu and resets its highlighted item."
   [shell-state]
   (assoc shell-state :menu closed-menu-state))
+
+(defn begin-editing
+  "Starts inline editing for the currently selected node."
+  [shell-state]
+  (let [path (get-in shell-state [:domain :selection])
+        root (get-in shell-state [:domain :root])]
+    (if (editor/valid-node-path? root path)
+      (-> shell-state
+          close-menu
+          (assoc :editing {:path path
+                           :text (editing-node-text (editor/node-at-path root path))}))
+      shell-state)))
+
+(defn update-editing-text
+  "Updates the draft text for the active inline editor."
+  [shell-state text]
+  (if (:editing shell-state)
+    (assoc-in shell-state [:editing :text] text)
+    shell-state))
+
+(defn cancel-editing
+  "Cancels the active inline edit and restores the prior node state."
+  [shell-state]
+  (dissoc shell-state :editing))
+
+(defn commit-editing
+  "Commits the active inline edit when the draft can be parsed into a node."
+  [shell-state]
+  (if-let [{:keys [path text]} (:editing shell-state)]
+    (let [root (get-in shell-state [:domain :root])]
+      (if-not (editor/valid-node-path? root path)
+        (dissoc shell-state :editing)
+        (let [node (editor/node-at-path root path)
+              replacement (replacement-node-for-edit node text)]
+          (if replacement
+            (-> shell-state
+                (assoc :domain (-> (:domain shell-state)
+                                   (editor/apply-command {:type :select
+                                                          :path path})
+                                   (editor/apply-command {:type :replace-selected
+                                                          :node replacement})))
+                close-menu
+                (dissoc :editing))
+            (dissoc shell-state :editing)))))
+    shell-state))
 
 (defn- select-path [domain-state path]
   (editor/apply-command domain-state {:type :select
@@ -244,9 +334,11 @@
 (defn activate-menu-action
   "Runs the command attached to a menu item when that item exists."
   [shell-state action-id]
-  (if-let [{:keys [command]} (first (filter #(= action-id (:id %))
-                                            (available-menu-actions shell-state)))]
-    (apply-domain-command shell-state command)
+  (if-let [{:keys [command transition]} (first (filter #(= action-id (:id %))
+                                                       (available-menu-actions shell-state)))]
+    (case transition
+      :begin-editing (begin-editing shell-state)
+      (apply-domain-command shell-state command))
     shell-state))
 
 (defn step-menu-selection
@@ -301,15 +393,17 @@
 (defn move-selection
   "Moves either node selection or menu selection, depending on whether the menu is open."
   [shell-state direction]
-  (if (get-in shell-state [:menu :open?])
-    (case direction
-      (:up :left) (step-menu-selection shell-state -1)
-      (:down :right) (step-menu-selection shell-state 1)
-      shell-state)
-    (if-let [target (case (selection-region shell-state)
-                      :stack (stack-move-target shell-state direction)
-                      :breadcrumb (breadcrumb-move-target shell-state direction)
-                      nil)]
-      (-> (select-shell-path shell-state target)
-          close-menu)
-      shell-state)))
+  (if (:editing shell-state)
+    shell-state
+    (if (get-in shell-state [:menu :open?])
+      (case direction
+        (:up :left) (step-menu-selection shell-state -1)
+        (:down :right) (step-menu-selection shell-state 1)
+        shell-state)
+      (if-let [target (case (selection-region shell-state)
+                        :stack (stack-move-target shell-state direction)
+                        :breadcrumb (breadcrumb-move-target shell-state direction)
+                        nil)]
+        (-> (select-shell-path shell-state target)
+            close-menu)
+        shell-state))))

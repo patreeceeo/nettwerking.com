@@ -136,6 +136,28 @@
         (catch :default _error
           ::invalid-snapshot)))))
 
+(defn- editing-path [shell-state]
+  (get-in shell-state [:editing :path]))
+
+(defn- editing? [shell-state]
+  (some? (editing-path shell-state)))
+
+(defn- focus-editing-node! [instance]
+  (when-let [element (.querySelector (:container instance) "[data-edit-input='true']")]
+    (.focus element)
+    (when-let [selection (.getSelection js/window)]
+      (let [range (.createRange js/document)]
+        (.selectNodeContents range element)
+        (.removeAllRanges selection)
+        (.addRange selection range)))))
+
+(defn- editing-input-selector [path]
+  (str "[data-testid='edit-input-" (path-id path) "']"))
+
+(defn- set-editing-node-text! [path text]
+  (when-let [element (.querySelector js/document (editing-input-selector path))]
+    (set! (.-textContent element) text)))
+
 (defn- persist-now! [instance]
   (let [{:keys [storage storage-key state timeout-id]} instance]
     (reset! timeout-id nil)
@@ -155,12 +177,17 @@
 (defn- update-shell! [instance update-fn persist?]
   (let [before @(:state instance)
         after (shell/normalize-shell-state (update-fn before))
-        changed? (not= before after)]
+        changed? (not= before after)
+        before-editing-path (editing-path before)
+        after-editing-path (editing-path after)]
     (when changed?
       ;; Every UI transition flows through shell normalization so selection,
       ;; expansion, and menu state stay in sync before the next render.
       (reset! (:state instance) after)
       (r/flush)
+      (when (and after-editing-path
+                 (not= before-editing-path after-editing-path))
+        (focus-editing-node! instance))
       (sync-menu-presentation! instance)
       (sync-selected-menu-action-visibility! instance)
       (schedule-selected-menu-action-visibility! instance)
@@ -181,6 +208,18 @@
 
 (defn- activate-menu-action! [instance action-id]
   (update-shell! instance #(shell/activate-menu-action % action-id) true))
+
+(defn- begin-editing! [instance]
+  (update-shell! instance shell/begin-editing false))
+
+(defn- update-editing-text! [instance text]
+  (update-shell! instance #(shell/update-editing-text % text) false))
+
+(defn- cancel-editing! [instance]
+  (update-shell! instance shell/cancel-editing false))
+
+(defn- commit-editing! [instance persist?]
+  (update-shell! instance shell/commit-editing persist?))
 
 (defn- set-body-menu-open! [open?]
   (let [class-list (.-classList (.-body js/document))]
@@ -237,13 +276,28 @@
   (.stopPropagation event))
 
 (defn- handle-document-click! [instance event]
-  (when (and (get-in @(:state instance) [:menu :open?])
-             (not (.closest (.-target event) "[data-menu-context='true']")))
-    (close-menu! instance)))
+  (let [shell-state @(:state instance)
+        target (.-target event)]
+    (cond
+      (and (editing? shell-state)
+           (not (.closest target "[data-edit-context='true']")))
+      (commit-editing! instance true)
+
+      (and (get-in shell-state [:menu :open?])
+           (not (.closest target "[data-menu-context='true']")))
+      (close-menu! instance)
+
+      :else nil)))
 
 (defn- handle-document-keydown! [instance event]
-  (let [direction (movement-direction (.-key event))]
+  (let [shell-state @(:state instance)
+        direction (movement-direction (.-key event))]
     (cond
+      (editing? shell-state)
+      (when (= "Enter" (.-key event))
+        (.preventDefault event)
+        (commit-editing! instance true))
+
       direction
       (do
         (.preventDefault event)
@@ -252,7 +306,7 @@
       (= "." (.-key event))
       (do
         (.preventDefault event)
-        (toggle-menu-for-path! instance (get-in @(:state instance) [:domain :selection])))
+        (toggle-menu-for-path! instance (get-in shell-state [:domain :selection])))
 
       (and (= "Escape" (.-key event))
            (get-in @(:state instance) [:menu :open?]))
@@ -261,20 +315,25 @@
         (close-menu! instance))
 
       (= " " (.-key event))
-      (when-not (get-in @(:state instance) [:menu :open?])
+      (when-not (get-in shell-state [:menu :open?])
         (.preventDefault event)
-        (case (shell/selection-region @(:state instance))
+        (case (shell/selection-region shell-state)
           :breadcrumb
           (toggle-breadcrumb-expansion! instance
-                                        (get-in @(:state instance) [:domain :selection]))
+                                        (get-in shell-state [:domain :selection]))
           :stack
           (expand-stack-node! instance
-                              (get-in @(:state instance) [:domain :selection]))
+                              (get-in shell-state [:domain :selection]))
           nil))
 
+      (= "e" (some-> (.-key event) string/lower-case))
+      (do
+        (.preventDefault event)
+        (begin-editing! instance))
+
       (and (= "Enter" (.-key event))
-           (get-in @(:state instance) [:menu :open?]))
-      (when-let [action-id (:id (shell/current-menu-action @(:state instance)))]
+           (get-in shell-state [:menu :open?]))
+      (when-let [action-id (:id (shell/current-menu-action shell-state))]
         (.preventDefault event)
         (activate-menu-action! instance action-id))
 
@@ -286,30 +345,90 @@
      [:span.node-token (node-text display-node)]
      [:span.node-meta (node-kind-label node)]]))
 
-(defn- node-button-view [instance path node selected? extra-class testid region]
+(def editing-input-view
+  (r/create-class
+   {:display-name "editing-input-view"
+    :component-did-mount
+    (fn [component]
+      (let [[_ _ path text _] (r/argv component)]
+        (set-editing-node-text! path text)))
+    :should-component-update
+    (fn [_component _old-argv _new-argv]
+      false)
+    :reagent-render
+    (fn [instance path text placeholder]
+      [:div {:class "node-editor"
+             :contentEditable true
+             :suppressContentEditableWarning true
+             :role "textbox"
+             :data-edit-input "true"
+             :data-testid (str "edit-input-" (path-id path))
+             :data-placeholder placeholder
+             :on-click stop-event!
+             :on-input (fn [event]
+                         (update-editing-text! instance
+                                               (or (.-textContent (.-currentTarget event))
+                                                   "")))
+             :on-key-down (fn [event]
+                            (stop-event! event)
+                            (case (.-key event)
+                              "Enter"
+                              (do
+                                (.preventDefault event)
+                                (commit-editing! instance true))
+
+                              "Escape"
+                              (do
+                                (.preventDefault event)
+                                (cancel-editing! instance))
+
+                              nil))}])}))
+
+(defn- editing-node-view [instance path node selected? extra-class testid]
+  (let [classes (cond-> ["node-button" extra-class]
+                  selected? (conj "selected-node"))]
+    [:div {:class (string/join " " classes)
+           :data-node-body "true"
+           :data-node-id (path-id path)
+           :data-testid testid
+           :data-selected (if selected? "true" "false")
+           :data-edit-context "true"}
+     ^{:key (str "edit-" (path-id path))}
+     [editing-input-view instance
+      path
+      (get-in @(:state instance) [:editing :text])
+      (when (= :hole (:type node)) "value")]
+     [:span.node-meta (node-kind-label node)]]))
+
+(defn- node-button-view [instance shell-state path node selected? extra-class testid region]
   (let [classes (cond-> ["node-button" extra-class]
                   selected? (conj "selected-node"))
         aria-label (str (string/capitalize (node-kind-label node))
                         ": "
                         (node-text node))
+        editing-node? (= path (editing-path shell-state))
         menu-open? (get-in @(:state instance) [:menu :open?])
         on-click (fn [event]
                    (stop-event! event)
+                   (when (editing? @(:state instance))
+                     (commit-editing! instance true))
                    (when-not menu-open?
                      (case region
                        "breadcrumb" (toggle-breadcrumb-expansion! instance path)
                        "stack" (expand-stack-node! instance path)
                        nil)))]
-    [:button {:type "button"
-              :class (string/join " " classes)
-              :data-node-body "true"
-              :data-node-id (path-id path)
-              :data-node-region region
-              :data-testid testid
-              :data-selected (if selected? "true" "false")
-              :aria-label aria-label
-              :on-click on-click}
-     [node-token-view node]]))
+    (if editing-node?
+      [editing-node-view instance path node selected? extra-class testid]
+      [:button {:type "button"
+                :class (string/join " " classes)
+                :data-node-body "true"
+                :data-node-id (path-id path)
+                :data-node-region region
+                :data-testid testid
+                :data-selected (if selected? "true" "false")
+                :aria-label aria-label
+                :on-click on-click}
+       [node-token-view node]]))
 
 (defn- menu-toggle-view [instance path selected?]
   [:button {:type "button"
@@ -319,6 +438,8 @@
             :aria-label "Open actions"
             :on-click (fn [event]
                         (stop-event! event)
+                        (when (editing? @(:state instance))
+                          (commit-editing! instance true))
                         (let [menu-open? (get-in @(:state instance) [:menu :open?])
                               selection (get-in @(:state instance) [:domain :selection])]
                           (when (or (not menu-open?)
@@ -393,6 +514,7 @@
      (when menu-target?
        [menu-cutout-view "menu-cutout" "999px"])
      [node-button-view instance
+      shell-state
       path
       (editor/node-at-path (:root domain-state) path)
       selected?
@@ -414,10 +536,11 @@
               [breadcrumb-item-view instance shell-state path]])
            (shell/breadcrumb-paths expanded-path)))))
 
-(defn- stack-row-content-view [instance path node selected-row?]
+(defn- stack-row-content-view [instance shell-state path node selected-row?]
   [:div {:class (str "stack-row" (when selected-row? " focus-row"))
          :data-testid (when selected-row? "focus-row")}
    [node-button-view instance
+    shell-state
     path
     node
     selected-row?
@@ -439,7 +562,7 @@
            :on-click (when menu-open? stop-event!)}
      (when menu-open?
        [menu-cutout-view "menu-cutout" "1.05rem"])
-     [stack-row-content-view instance path node selected-row?]]))
+     [stack-row-content-view instance shell-state path node selected-row?]]))
 
 (defn- stack-view [instance shell-state]
   (let [domain-state (:domain shell-state)
