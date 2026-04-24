@@ -464,7 +464,6 @@
      [:div.status-kind {:data-testid "status-kind"} status-title]
      (when status-summary
        [:div.status-summary {:data-testid "status-summary"} status-summary])
-     [:div.result-value {:data-testid "result-value"} (result-copy domain-state)]
      [:div.status-live {:data-testid "status-live"
                         :aria-live "polite"}
       (if status-summary
@@ -476,20 +475,19 @@
         domain-state (:domain shell-state)
         {task-title :title
          task-description :description} (:task domain-state)]
-    [:<>
-     [:main.editor-shell
-      [:header.orientation-header
-       [:h1 {:data-testid "app-title"} "Live Core Editor"]
-       [:p {:data-testid "starter-task"}
-        [:strong task-title]
-        " "
-        task-description]]
-      [:div.workspace-grid
-       [:section.tree-panel {:aria-label "Focused tree editor"}
-        [:div.panel-heading "Focused Tree Editor"]
-        [breadcrumbs-view instance shell-state]
-        [stack-view instance shell-state]]
-       [status-panel-view shell-state]]]
+    [:main.editor-shell
+     [:header.orientation-header
+      [:h1 {:data-testid "app-title"} "Edit structure, not strings, in nascent Lisp dialect"]
+      [:p {:data-testid "starter-task"}
+       [:strong task-title]
+       " "
+       task-description]]
+     [:div.workspace-grid
+      [:section.tree-panel {:aria-label "Focused tree editor"}
+       [:div.panel-heading "Code tree: Functions are parents, arguments are children."]
+       [breadcrumbs-view instance shell-state]
+       [stack-view instance shell-state]]
+       [status-panel-view shell-state]]
      [action-menu-overlay-view instance shell-state]]))
 
 (defn render!

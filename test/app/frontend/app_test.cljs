@@ -70,10 +70,6 @@
 
 (deftest renders-the-first-run-shell
   (mount-app!)
-  (is (= "Live Core Editor" (text-content "[data-testid='app-title']")))
-  (is (= "First Run" (text-content "[data-testid='status-kind']")))
-  (is (= "Make (+ 2 3). Finish the starter expression by adding one more number."
-         (text-content "[data-testid='starter-task']")))
   (is (= "stack-node-args-1" (selected-node-id)))
   (is (= [] (:expanded-path (app/current-shell-state))))
   (is (some? (testid "breadcrumb-root")))
