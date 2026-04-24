@@ -254,6 +254,12 @@
         (.preventDefault event)
         (toggle-menu-for-path! instance (get-in @(:state instance) [:domain :selection])))
 
+      (and (= "Escape" (.-key event))
+           (get-in @(:state instance) [:menu :open?]))
+      (do
+        (.preventDefault event)
+        (close-menu! instance))
+
       (= " " (.-key event))
       (when-not (get-in @(:state instance) [:menu :open?])
         (.preventDefault event)
