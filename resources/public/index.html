@@ -131,7 +131,7 @@
 
       .menu-target {
         position: relative;
-        z-index: 13;
+        z-index: 11;
       }
 
       .focus-row {
@@ -233,7 +233,7 @@
       .menu-cutout {
         position: absolute;
         inset: -0.35rem;
-        z-index: 11;
+        z-index: 0;
         pointer-events: none;
         border: 1px solid rgba(255, 255, 255, 0.58);
         box-shadow: 0 0 0 9999px rgba(21, 17, 13, 0.58);
@@ -254,8 +254,16 @@
         background: rgba(255, 253, 250, 0.98);
         box-shadow: 0 -14px 36px rgba(35, 31, 26, 0.18);
         max-height: min(26rem, calc(100vh - 6rem));
+        overflow: hidden;
+      }
+
+      .action-menu-items {
+        display: grid;
+        gap: 0.55rem;
         overflow-y: auto;
         overscroll-behavior: contain;
+        max-height: min(16rem, calc(100vh - 13rem));
+        padding-right: 0.1rem;
       }
 
       .action-sheet-handle {
@@ -294,6 +302,7 @@
         background: white;
         border-radius: 0.75rem;
         padding: 0.65rem 0.75rem;
+        scroll-margin-block: 3.5rem;
       }
 
       .selected-action {

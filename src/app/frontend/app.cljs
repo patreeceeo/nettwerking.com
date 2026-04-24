@@ -22,6 +22,8 @@
 (defonce current-instance (atom nil))
 
 (declare sync-menu-presentation!)
+(declare sync-selected-menu-action-visibility!)
+(declare schedule-selected-menu-action-visibility!)
 
 (defn- path-id [path]
   (if (empty? path)
@@ -160,6 +162,8 @@
       (reset! (:state instance) after)
       (r/flush)
       (sync-menu-presentation! instance)
+      (sync-selected-menu-action-visibility! instance)
+      (schedule-selected-menu-action-visibility! instance)
       (r/flush)
       (when persist?
         (schedule-persist! instance)))))
@@ -187,6 +191,39 @@
 
 (defn- sync-menu-presentation! [instance]
   (set-body-menu-open! (get-in @(:state instance) [:menu :open?])))
+
+(defn- sync-selected-menu-action-visibility! [instance]
+  (when (get-in @(:state instance) [:menu :open?])
+    (when-let [container (.querySelector (:container instance) "[data-testid='action-menu-items']")]
+      (when-let [selected (.querySelector container "[data-action-selected='true']")]
+        (.scrollIntoView selected #js {:block "nearest"
+                                       :inline "nearest"})
+        (let [previous (.-previousElementSibling selected)
+              next (.-nextElementSibling selected)
+              container-rect (.getBoundingClientRect container)
+              min-rect (if previous
+                         (.getBoundingClientRect previous)
+                         (.getBoundingClientRect selected))
+              max-rect (if next
+                         (.getBoundingClientRect next)
+                         (.getBoundingClientRect selected))]
+          (cond
+            (< (.-top min-rect) (.-top container-rect))
+            (set! (.-scrollTop container)
+                  (+ (.-scrollTop container)
+                     (- (.-top min-rect) (.-top container-rect))))
+
+            (> (.-bottom max-rect) (.-bottom container-rect))
+            (set! (.-scrollTop container)
+                  (+ (.-scrollTop container)
+                     (- (.-bottom max-rect) (.-bottom container-rect))))
+
+            :else nil))))))
+
+(defn- schedule-selected-menu-action-visibility! [instance]
+  (js/requestAnimationFrame
+   (fn [_timestamp]
+     (sync-selected-menu-action-visibility! instance))))
 
 (defn- movement-direction [key]
   (case key
@@ -288,7 +325,7 @@
 
 (defn- menu-items-view [instance shell-state]
   (let [selected-action-id (:id (shell/current-menu-action shell-state))]
-    (into [:<>]
+    (into [:div.action-menu-items {:data-testid "action-menu-items"}]
           (map (fn [{:keys [id label summary testid]}]
                  ^{:key (name id)}
                  [:button {:type "button"

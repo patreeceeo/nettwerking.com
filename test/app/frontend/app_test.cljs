@@ -21,6 +21,18 @@
 (defn- text-content [selector]
   (some-> (query-one selector) .-textContent))
 
+(defn- style-value [selector property]
+  (some-> (query-one selector)
+          js/getComputedStyle
+          (.getPropertyValue property)
+          string/trim))
+
+(defn- inject-style! [css-text]
+  (let [style-element (.createElement js/document "style")]
+    (set! (.-textContent style-element) css-text)
+    (.appendChild (.-head js/document) style-element)
+    style-element))
+
 (defn- click! [element]
   (.dispatchEvent element
                   (js/MouseEvent. "click" #js {:bubbles true
@@ -233,6 +245,35 @@
   (click! (testid "menu-toggle-args-1"))
   (is (string/includes? (.-className (.-body js/document)) "menu-open"))
   (is (some? (testid "menu-backdrop")))
+  (let [menu (testid "action-menu")
+        rect (.getBoundingClientRect menu)
+        top-target (.elementFromPoint js/document
+                                      (+ (.-left rect) 20)
+                                      (+ (.-top rect) 20))]
+    (is (some? (.closest top-target "[data-testid='action-menu']"))))
   (click! (testid "menu-backdrop"))
   (is (nil? (testid "action-menu")))
   (is (not (string/includes? (.-className (.-body js/document)) "menu-open"))))
+
+(deftest selected-menu-action-scrolls-into-view-with-context
+  (let [scroll-calls (atom 0)
+        element-prototype (.-prototype js/Element)
+        original-scroll-into-view (.-scrollIntoView element-prototype)
+        style-element (inject-style! "[data-testid='action-menu-items'] { height: 1.5rem !important; max-height: 1.5rem !important; }")]
+    (try
+      (set! (.-scrollIntoView element-prototype)
+            (fn [& _args]
+              (swap! scroll-calls inc)))
+      (mount-app!)
+      (click! (testid "menu-toggle-args-1"))
+      (reset! scroll-calls 0)
+      (let [menu-items (testid "action-menu-items")]
+        (keydown! (testid "stack-node-args-1") "ArrowDown")
+        (keydown! (testid "stack-node-args-1") "ArrowDown")
+        (keydown! (testid "stack-node-args-1") "ArrowDown")
+        (is (= "action-insert-symbol-wat" (selected-action-id)))
+        (is (> @scroll-calls 0))
+        (is (some? menu-items)))
+      (finally
+        (set! (.-scrollIntoView element-prototype) original-scroll-into-view)
+        (.remove style-element)))))
