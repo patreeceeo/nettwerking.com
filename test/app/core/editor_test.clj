@@ -17,7 +17,7 @@
     (is (= :partial (get-in state [:eval :kind])))
     (is (= [:args 1] (:selection state)))
     (is (= :hole (:type selected-node)))
-    (is (true? (:enabled? (:insert-literal actions))))
+    (is (true? (:enabled? (:add-child actions))))
     (is (false? (:enabled? (:wrap-selected actions))))))
 
 (deftest restore-snapshot-handles-valid-and-invalid-snapshots
@@ -57,7 +57,7 @@
     (let [state (editor/initial-state)
           actions (actions-by-id state)]
       (is (true? (get-in state [:available-actions :selection-valid?])))
-      (is (true? (:enabled? (:insert-symbol actions))))
+      (is (true? (:enabled? (:add-child actions))))
       (is (= :hole-selected (:reason (:wrap-selected actions))))
       (is (= :already-hole (:reason (:delete-selected actions))))))
   (testing "literals expose wrap and delete actions"
@@ -78,16 +78,16 @@
 (deftest apply-command-rewrites-the-tree-and-recomputes-state
   (testing "filling the starter hole reaches success"
     (let [state (editor/apply-command (editor/initial-state)
-                                      {:type :insert-literal
-                                       :value 3})]
+                                      {:type :replace-selected
+                                       :node (editor/literal-node 3)})]
       (is (= :success (get-in state [:eval :kind])))
       (is (= 5 (get-in state [:eval :value])))
       (is (= :success (get-in state [:status :kind])))
       (is (= :dirty (get-in state [:storage :kind])))))
   (testing "replacing a selected literal rewrites the tree"
     (let [state (-> (editor/initial-state)
-                    (editor/apply-command {:type :insert-literal
-                                           :value 3})
+                    (editor/apply-command {:type :replace-selected
+                                           :node (editor/literal-node 3)})
                     (editor/apply-command {:type :select
                                            :path [:args 0]})
                     (editor/apply-command {:type :replace-selected
@@ -111,6 +111,26 @@
                                            :path [:args 0]})
                     (editor/apply-command {:type :delete-selected}))]
       (is (= :hole (:type (editor/node-at-path (:root state) [:args 0]))))
+      (is (= :partial (get-in state [:eval :kind])))))
+  (testing "adding a child to a literal node creates a call node"
+    (let [state (-> (editor/initial-state)
+                    (editor/apply-command {:type :replace-selected
+                                           :node (editor/literal-node 2)})
+                    (editor/apply-command {:type :select
+                                           :path [:args 0]})
+                    (editor/apply-command {:type :add-child}))]
+      (is (= :call (:type (editor/node-at-path (:root state) [:args 0]))))
+      (is (= '+ (get-in state [:root :args 0 :fn])))
+      (is (= [:args 0 :args 1] (:selection state)))
+      (is (= :partial (get-in state [:eval :kind])))))
+  (testing "adding a child to an existing call node appends an argument"
+    (let [state (-> (editor/initial-state)
+                    (editor/apply-command {:type :replace-selected
+                                           :node (editor/literal-node 3)})
+                    (editor/apply-command {:type :add-child}))]
+      (is (= 3 (count (get-in state [:root :args]))))
+      (is (= :hole (:type (editor/node-at-path (:root state) [:args 2]))))
+      (is (= [:args 2] (:selection state)))
       (is (= :partial (get-in state [:eval :kind]))))))
 
 (deftest selection-movement-traverses-the-tree

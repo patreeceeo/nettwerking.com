@@ -133,8 +133,8 @@
   [{:keys [root selection]}]
   (if-not (valid-node-path? root selection)
     {:selection-valid? false
-     :actions [(action :insert-literal false :reason :invalid-selection)
-               (action :insert-symbol false :reason :invalid-selection)
+     :actions [(action :add-child false :reason :invalid-selection)
+               (action :replace-selected false :reason :invalid-selection)
                (action :wrap-selected false :reason :invalid-selection)
                (action :delete-selected false :reason :invalid-selection)
                (action :move-selection-parent false :reason :invalid-selection)
@@ -144,8 +144,8 @@
     (let [selected-node (node-at-path root selection)
           hole-selected? (= :hole (:type selected-node))]
       {:selection-valid? true
-       :actions [(action :insert-literal true)
-                 (action :insert-symbol true)
+       :actions [(action :add-child true)
+                 (action :replace-selected true)
                  (action :wrap-selected (not hole-selected?)
                          :reason (when hole-selected? :hole-selected))
                  (action :delete-selected (not hole-selected?)
@@ -248,8 +248,6 @@
 
 (defn- replacement-node [command]
   (case (:type command)
-    :insert-literal (literal-node (:value command))
-    :insert-symbol (symbol-node (:name command))
     :replace-selected (:node command)
     nil))
 
@@ -295,7 +293,7 @@
                      {:storage-kind :dirty})
         (invalid-command-state state :invalid-move))
 
-      (contains? #{:insert-literal :insert-symbol :replace-selected} command-type)
+      (contains? #{:replace-selected} command-type)
       (let [replacement (replacement-node command)]
         (cond
           (not (valid-node-tree? replacement))
@@ -305,6 +303,41 @@
           (build-state (replace-node root selection replacement)
                        selection
                        {:storage-kind :dirty})))
+
+      (= :add-child command-type)
+      (let [selected-node (node-at-path root selection)
+            parent-path (parent-path selection)]
+        (cond
+          (and parent-path
+               (= :call (:type (node-at-path root parent-path)))
+               (let [parent (node-at-path root parent-path)
+                     child-index (last selection)]
+                 (= child-index (dec (count (:args parent))))))
+          (let [parent-node (node-at-path root parent-path)
+                new-parent (update parent-node :args conj (hole-node "add value"))
+                new-index (dec (count (:args new-parent)))
+                new-selection (conj parent-path :args new-index)
+                new-root (if (empty? parent-path)
+                          new-parent
+                          (assoc-in root parent-path new-parent))]
+            (build-state new-root
+                         new-selection
+                         {:storage-kind :dirty}))
+
+          (or (empty? selection) (= :call (:type selected-node)))
+          (let [new-node (update selected-node :args conj (hole-node "add value"))
+                new-index (dec (count (:args new-node)))]
+            (build-state (replace-node root selection new-node)
+                         (conj selection :args new-index)
+                         {:storage-kind :dirty}))
+
+          :else
+          (let [new-node (call-node
+                          (symbol "+")
+                          [selected-node (hole-node "add value")])]
+            (build-state (replace-node root selection new-node)
+                         (into selection [:args 1])
+                         {:storage-kind :dirty}))))
 
       (= :wrap-selected command-type)
       (let [selected-node (node-at-path root selection)]

@@ -10,14 +10,14 @@
 
 (def menu-items-by-action-id
   "Frontend-only menu presentation keyed by domain action id."
-  {:insert-literal
-   [{:id :edit
-     :label "Edit"
-     :summary "Edit this node in place."
-     :testid "action-edit"
-     :transition :begin-editing}]
+  {:add-child
+   [{:id :add-child
+     :label "Add child"
+     :summary "Add a hole as a child."
+     :testid "action-add-child"
+     :command {:type :add-child}}]
 
-   :insert-symbol
+   :replace-selected
    [{:id :edit
      :label "Edit"
      :summary "Edit this node in place."
