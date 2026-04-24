@@ -20,17 +20,17 @@
       ];
     in {
       nixosModules = {
-        fullstack_clojure = { fullstack_clojure, config, lib, pkgs, ... }:
+        ted = { ted, config, lib, pkgs, ... }:
 
           let
-            pkg = fullstack_clojure.packages.${system}.default;
-            cfg = config.services.fullstack_clojure;
+            pkg = ted.packages.${system}.default;
+            cfg = config.services.ted;
           in {
 
             # --------------------------------------------------
             # Interface.
             options = {
-              services.fullstack_clojure = {
+              services.ted = {
                 enable = lib.mkEnableOption (lib.mdDoc "Fullstack Clojure Starter");
 
                 port = lib.mkOption {
@@ -47,7 +47,7 @@
 
             config = lib.mkIf cfg.enable  {
 
-              systemd.services.fullstack_clojure = {
+              systemd.services.ted = {
                 enable = true;
 
                 wantedBy = [
@@ -64,7 +64,7 @@
                   User = "root";
                   Group = "root";
                   WorkingDirectory = pkg;
-                  ExecStart = "${pkg}/bin/fullstack_clojure";
+                  ExecStart = "${pkg}/bin/ted";
                 };
               };
 
@@ -78,7 +78,7 @@
           modules = [ # Option list: https://jlesquembre.github.io/clj-nix/options/
             {
               projectSrc = ./.;
-              name = "fullstack_clojure";
+              name = "ted";
               main-ns = "app.backend.main";
               jdk = pkgs.jdk25_headless;
               buildCommand = ''
@@ -86,7 +86,7 @@
 
                 clojure -M:frontend compile app
 
-                clj-builder uber "fullstack_clojure/fullstack_clojure" "DEV" "app.backend.main" \
+                clj-builder uber "ted/ted" "DEV" "app.backend.main" \
                   'null' \
                   'null' \
                   'null'
@@ -102,7 +102,7 @@
           pkgs.gnumake
         ];
         shellHook = ''
-          echo "Developing fullstack_clojure"
+          echo "Developing ted"
         '';
       };
     };
