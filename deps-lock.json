@@ -1538,6 +1538,16 @@
       "hash": "sha256-5uGiImN0fokpANH1Aj4dDf6LFtZe/shy8gV3oGl+01c="
     },
     {
+      "mvn-path": "reagent/reagent/1.2.0/reagent-1.2.0.jar",
+      "mvn-repo": "https://repo.clojars.org/",
+      "hash": "sha256-Wz1uwv/zrlsMZQ44uhRu/Y59BDnw2QzCH8Foid2fm2k="
+    },
+    {
+      "mvn-path": "reagent/reagent/1.2.0/reagent-1.2.0.pom",
+      "mvn-repo": "https://repo.clojars.org/",
+      "hash": "sha256-i3ughJrh/lS+LDkyB0A6GbmXqREEt3K6DLXF6RmZL8A="
+    },
+    {
       "mvn-path": "rewrite-clj/rewrite-clj/1.1.48/rewrite-clj-1.1.48.jar",
       "mvn-repo": "https://repo.clojars.org/",
       "hash": "sha256-p1KzkyJd+YBJD6Id/z5XPs00wYrczUWZAQTXyr4spBE="
