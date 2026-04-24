@@ -464,6 +464,7 @@
      [:div.status-kind {:data-testid "status-kind"} status-title]
      (when status-summary
        [:div.status-summary {:data-testid "status-summary"} status-summary])
+     [:div.result-value {:data-testid "result-value"} (result-copy domain-state)]
      [:div.status-live {:data-testid "status-live"
                         :aria-live "polite"}
       (if status-summary
