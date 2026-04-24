@@ -183,6 +183,11 @@
   (is (= "stack-node-args-1" (selected-node-id)))
   (keydown! (testid "stack-node-args-1") ".")
   (is (= "action-insert-literal-3" (selected-action-id)))
+  (is (= "add value hole" (text-content "[data-testid='action-menu-title']")))
+  (is (string/includes? (.-className (.-body js/document)) "menu-open"))
+  (is (some? (testid "menu-cutout")))
+  (click! (testid "stack-node-args-0"))
+  (is (= "stack-node-args-1" (selected-node-id)))
   (keydown! (testid "stack-node-args-1") "ArrowDown")
   (is (= "stack-node-args-1" (selected-node-id)))
   (is (= "action-insert-literal-4" (selected-action-id)))
@@ -194,9 +199,11 @@
   (is (= "This function does not exist yet."
          (text-content "[data-testid='result-value']")))
   (keydown! (testid "stack-node-args-1") ".")
+  (is (string/includes? (.-className (.-body js/document)) "menu-open"))
   (keydown! (testid "stack-node-args-1") "Enter")
   (is (= "Success" (text-content "[data-testid='status-kind']")))
-  (is (= "5" (text-content "[data-testid='result-value']"))))
+  (is (= "5" (text-content "[data-testid='result-value']")))
+  (is (not (string/includes? (.-className (.-body js/document)) "menu-open"))))
 
 (deftest opening-a-breadcrumb-menu-on-an-ancestor-re-expands-that-node
   (mount-app!)
@@ -220,3 +227,12 @@
   (is (= "stack-node-args-0" (selected-node-id)))
   (keydown-document! ".")
   (is (= "action-insert-literal-3" (selected-action-id))))
+
+(deftest sheet-menu-locks-page-scroll-and-closes-from-backdrop
+  (mount-app!)
+  (click! (testid "menu-toggle-args-1"))
+  (is (string/includes? (.-className (.-body js/document)) "menu-open"))
+  (is (some? (testid "menu-backdrop")))
+  (click! (testid "menu-backdrop"))
+  (is (nil? (testid "action-menu")))
+  (is (not (string/includes? (.-className (.-body js/document)) "menu-open"))))
