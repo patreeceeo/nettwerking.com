@@ -84,6 +84,12 @@
               buildCommand = ''
                 mkdir -p resources/public/js
 
+                # Add nodejs to PATH for npm
+                export PATH="${pkgs.nodejs_20}/bin:$PATH"
+
+                # Install npm dependencies for React
+                npm install
+
                 clojure -M:frontend compile app
 
                 clj-builder uber "ted/ted" "DEV" "app.backend.main" \
