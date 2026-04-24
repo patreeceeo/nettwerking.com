@@ -245,6 +245,11 @@
     (assoc-in shell-state [:editing :text] text)
     shell-state))
 
+(defn cancel-editing
+  "Cancels the active inline edit and restores the prior node state."
+  [shell-state]
+  (dissoc shell-state :editing))
+
 (defn commit-editing
   "Commits the active inline edit when the draft can be parsed into a node."
   [shell-state]

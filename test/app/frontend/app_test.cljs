@@ -47,9 +47,13 @@
     (.removeAllRanges selection)
     (.addRange selection range)))
 
+(def special-editing-keys
+  #{"Enter" "Backspace" "Delete" "Shift" "Control" "Alt" "Meta" "Escape"
+    "ArrowUp" "ArrowDown" "ArrowLeft" "ArrowRight"})
+
 (defn- type-key! [element key]
   (keydown! element key)
-  (when-not (= "Enter" key)
+  (when-not (contains? special-editing-keys key)
     (let [selection (.getSelection js/window)]
       (when-not (pos? (.-rangeCount selection))
         (throw (js/Error. "Missing text selection while typing into contenteditable.")))
@@ -279,3 +283,15 @@
                         "ABC"))
   (is (= :symbol (get-in (app/current-state) [:root :args 1 :type])))
   (is (= "ABC" (get-in (app/current-state) [:root :args 1 :name]))))
+
+(deftest escape-cancels-inline-editing
+  (mount-app!)
+  (keydown! (testid "stack-node-args-1") "e")
+  (let [editor-input (testid "edit-input-args-1")]
+    (is (some? editor-input))
+    (input-text! editor-input "999")
+    (keydown! editor-input "Escape"))
+  (is (nil? (testid "edit-input-args-1")))
+  (is (= :hole (get-in (app/current-state) [:root :args 1 :type])))
+  (is (string/includes? (or (text-content "[data-testid='stack-node-args-1']") "")
+                        "add value")))

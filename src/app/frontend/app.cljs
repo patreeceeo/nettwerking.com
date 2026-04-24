@@ -204,6 +204,9 @@
 (defn- update-editing-text! [instance text]
   (update-shell! instance #(shell/update-editing-text % text) false))
 
+(defn- cancel-editing! [instance]
+  (update-shell! instance shell/cancel-editing false))
+
 (defn- commit-editing! [instance persist?]
   (update-shell! instance shell/commit-editing persist?))
 
@@ -266,7 +269,7 @@
                               (get-in shell-state [:domain :selection]))
           nil))
 
-      (= "e" (string/lower-case (.-key event)))
+      (= "e" (some-> (.-key event) string/lower-case))
       (do
         (.preventDefault event)
         (begin-editing! instance))
@@ -311,9 +314,18 @@
                                                    "")))
              :on-key-down (fn [event]
                             (stop-event! event)
-                            (when (= "Enter" (.-key event))
-                              (.preventDefault event)
-                              (commit-editing! instance true)))}])}))
+                            (case (.-key event)
+                              "Enter"
+                              (do
+                                (.preventDefault event)
+                                (commit-editing! instance true))
+
+                              "Escape"
+                              (do
+                                (.preventDefault event)
+                                (cancel-editing! instance))
+
+                              nil))}])}))
 
 (defn- editing-node-view [instance path node selected? extra-class testid]
   (let [classes (cond-> ["node-button" extra-class]
