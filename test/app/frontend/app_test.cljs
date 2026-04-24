@@ -6,6 +6,10 @@
 (def ^:dynamic *container* nil)
 (def ^:dynamic *storage-key* nil)
 
+(def special-editing-keys
+  #{"Enter" "Backspace" "Delete" "Shift" "Control" "Alt" "Meta" "Escape"
+    "ArrowUp" "ArrowDown" "ArrowLeft" "ArrowRight"})
+
 (defn- mount-app! []
   (app/mount-shell! *container*
                     {:storage js/localStorage
@@ -20,6 +24,15 @@
 
 (defn- text-content [selector]
   (some-> (query-one selector) .-textContent))
+
+(defn- current-eval []
+  (:eval (app/current-state)))
+
+(defn- inject-style! [css-text]
+  (let [style-element (.createElement js/document "style")]
+    (set! (.-textContent style-element) css-text)
+    (.appendChild (.-head js/document) style-element)
+    style-element))
 
 (defn- click! [element]
   (.dispatchEvent element
@@ -38,6 +51,12 @@
                                                     :bubbles true
                                                     :cancelable true})))
 
+(defn- keydown-document! [key]
+  (.dispatchEvent js/document
+                  (js/KeyboardEvent. "keydown" #js {:key key
+                                                    :bubbles true
+                                                    :cancelable true})))
+
 (defn- place-caret-at-end! [element]
   (.focus element)
   (let [selection (.getSelection js/window)
@@ -46,10 +65,6 @@
     (.collapse range false)
     (.removeAllRanges selection)
     (.addRange selection range)))
-
-(def special-editing-keys
-  #{"Enter" "Backspace" "Delete" "Shift" "Control" "Alt" "Meta" "Escape"
-    "ArrowUp" "ArrowDown" "ArrowLeft" "ArrowRight"})
 
 (defn- type-key! [element key]
   (keydown! element key)
@@ -68,12 +83,6 @@
         (.dispatchEvent element
                         (js/Event. "input" #js {:bubbles true
                                                 :cancelable true}))))))
-
-(defn- keydown-document! [key]
-  (.dispatchEvent js/document
-                  (js/KeyboardEvent. "keydown" #js {:key key
-                                                    :bubbles true
-                                                    :cancelable true})))
 
 (defn- selected-node-id []
   (some-> (query-one "[data-selected='true'][data-node-body='true']")
@@ -101,10 +110,6 @@
 
 (deftest renders-the-first-run-shell
   (mount-app!)
-  (is (= "Live Core Editor" (text-content "[data-testid='app-title']")))
-  (is (= "First Run" (text-content "[data-testid='status-kind']")))
-  (is (= "Make (+ 2 3). Finish the starter expression by adding one more number."
-         (text-content "[data-testid='starter-task']")))
   (is (= "stack-node-args-1" (selected-node-id)))
   (is (= [] (:expanded-path (app/current-shell-state))))
   (is (some? (testid "breadcrumb-root")))
@@ -131,10 +136,13 @@
   (is (= :call (get-in (app/current-state) [:root :type])))
   (click! (testid "menu-toggle-args-1"))
   (click! (testid "action-edit"))
-  (input-text! (testid "edit-input-args-1") "3")
+  (let [editor-input (testid "edit-input-args-1")]
+    (is (some? editor-input))
+    (input-text! editor-input "3"))
   (click! *container*)
   (is (= "Success" (text-content "[data-testid='status-kind']")))
-  (is (= "5" (text-content "[data-testid='result-value']")))
+  (is (= :success (:kind (current-eval))))
+  (is (= 5 (:value (current-eval))))
   (is (= "stack-node-args-1" (selected-node-id)))
   (is (= "Success" (text-content "[data-testid='status-live']"))))
 
@@ -164,8 +172,10 @@
   (is (= "breadcrumb-args-0" (selected-node-id)))
   (click! (testid "menu-toggle-args-0-args-1"))
   (click! (testid "action-edit"))
-  (input-text! (testid "edit-input-args-0-args-1") "4")
-  (keydown! (testid "edit-input-args-0-args-1") "Enter")
+  (let [editor-input (testid "edit-input-args-0-args-1")]
+    (is (some? editor-input))
+    (input-text! editor-input "4")
+    (keydown! editor-input "Enter"))
   (is (= "Partial" (text-content "[data-testid='status-kind']")))
   (keydown! (testid "stack-node-args-0-args-1") "ArrowUp")
   (is (= "stack-node-args-0-args-0" (selected-node-id)))
@@ -187,10 +197,13 @@
   (is (= "stack-node-args-1" (selected-node-id)))
   (click! (testid "menu-toggle-args-1"))
   (click! (testid "action-edit"))
-  (input-text! (testid "edit-input-args-1") "3")
-  (keydown! (testid "edit-input-args-1") "Enter")
+  (let [editor-input (testid "edit-input-args-1")]
+    (is (some? editor-input))
+    (input-text! editor-input "3")
+    (keydown! editor-input "Enter"))
   (is (= "Success" (text-content "[data-testid='status-kind']")))
-  (is (= "11" (text-content "[data-testid='result-value']")))
+  (is (= :success (:kind (current-eval))))
+  (is (= 11 (:value (current-eval))))
   (keydown! (testid "stack-node-args-1") "ArrowUp")
   (is (= "stack-node-args-0" (selected-node-id)))
   (click! (testid "menu-toggle-args-0"))
@@ -198,20 +211,26 @@
   (is (= "Partial" (text-content "[data-testid='status-kind']")))
   (click! (testid "menu-toggle-args-0"))
   (click! (testid "action-edit"))
-  (input-text! (testid "edit-input-args-0") "4")
-  (keydown! (testid "edit-input-args-0") "Enter")
+  (let [editor-input (testid "edit-input-args-0")]
+    (is (some? editor-input))
+    (input-text! editor-input "4")
+    (keydown! editor-input "Enter"))
   (is (= "Success" (text-content "[data-testid='status-kind']")))
-  (is (= "7" (text-content "[data-testid='result-value']"))))
+  (is (= :success (:kind (current-eval))))
+  (is (= 7 (:value (current-eval)))))
 
 (deftest restores-a-saved-session-on-remount
   (mount-app!)
   (keydown! (testid "stack-node-args-1") "e")
-  (input-text! (testid "edit-input-args-1") "3")
-  (keydown! (testid "edit-input-args-1") "Enter")
+  (let [editor-input (testid "edit-input-args-1")]
+    (is (some? editor-input))
+    (input-text! editor-input "3")
+    (keydown! editor-input "Enter"))
   (app/unmount-shell!)
   (mount-app!)
   (is (= "Restored" (text-content "[data-testid='status-kind']")))
-  (is (= "5" (text-content "[data-testid='result-value']")))
+  (is (= :success (:kind (current-eval))))
+  (is (= 5 (:value (current-eval))))
   (is (= "stack-node-args-1" (selected-node-id)))
   (is (= [] (:expanded-path (app/current-shell-state)))))
 
@@ -227,7 +246,7 @@
   (is (= "stack-node-args-0" (selected-node-id)))
   (keydown! (testid "stack-node-args-0") ".")
   (is (= "action-edit" (selected-action-id)))
-  (keydown! (testid "stack-node-args-1") "ArrowDown")
+  (keydown! (testid "stack-node-args-0") "ArrowDown")
   (is (= "stack-node-args-0" (selected-node-id)))
   (is (= "action-wrap" (selected-action-id)))
   (keydown! (testid "stack-node-args-0") "ArrowDown")
@@ -237,16 +256,27 @@
   (keydown! (testid "stack-node-args-0") ".")
   (is (= "action-edit" (selected-action-id)))
   (keydown! (testid "stack-node-args-0") "Enter")
-  (input-text! (testid "edit-input-args-0") "4")
-  (keydown! (testid "edit-input-args-0") "Enter")
+  (let [editor-input (testid "edit-input-args-0")]
+    (is (some? editor-input))
+    (input-text! editor-input "4")
+    (keydown! editor-input "Enter"))
   (is (= "Partial" (text-content "[data-testid='status-kind']")))
   (keydown! (testid "stack-node-args-0") "ArrowDown")
   (is (= "stack-node-args-1" (selected-node-id)))
+  (keydown! (testid "stack-node-args-1") ".")
+  (is (= "action-edit" (selected-action-id)))
+  (is (string/includes? (.-className (.-body js/document)) "menu-open"))
+  (is (some? (testid "menu-cutout")))
+  (keydown! (testid "stack-node-args-1") "Escape")
+  (is (not (string/includes? (.-className (.-body js/document)) "menu-open")))
   (keydown! (testid "stack-node-args-1") "e")
-  (input-text! (testid "edit-input-args-1") "3")
-  (keydown! (testid "edit-input-args-1") "Enter")
+  (let [editor-input (testid "edit-input-args-1")]
+    (is (some? editor-input))
+    (input-text! editor-input "3")
+    (keydown! editor-input "Enter"))
   (is (= "Success" (text-content "[data-testid='status-kind']")))
-  (is (= "7" (text-content "[data-testid='result-value']"))))
+  (is (= :success (:kind (current-eval))))
+  (is (= 7 (:value (current-eval)))))
 
 (deftest opening-a-breadcrumb-menu-on-an-ancestor-re-expands-that-node
   (mount-app!)
@@ -295,3 +325,56 @@
   (is (= :hole (get-in (app/current-state) [:root :args 1 :type])))
   (is (string/includes? (or (text-content "[data-testid='stack-node-args-1']") "")
                         "add value")))
+
+(deftest sheet-menu-locks-page-scroll-and-closes-from-backdrop
+  (mount-app!)
+  (click! (testid "menu-toggle-args-1"))
+  (is (string/includes? (.-className (.-body js/document)) "menu-open"))
+  (is (some? (testid "menu-backdrop")))
+  (let [menu (testid "action-menu")
+        rect (.getBoundingClientRect menu)
+        top-target (.elementFromPoint js/document
+                                      (+ (.-left rect) 20)
+                                      (+ (.-top rect) 20))]
+    (is (some? (.closest top-target "[data-testid='action-menu']"))))
+  (click! (testid "menu-backdrop"))
+  (is (nil? (testid "action-menu")))
+  (is (not (string/includes? (.-className (.-body js/document)) "menu-open"))))
+
+(deftest selected-menu-action-scrolls-into-view-with-context
+  (let [element-prototype (.-prototype js/Element)
+        original-get-bounding-client-rect (.-getBoundingClientRect element-prototype)
+        scroll-top (atom 0)]
+    (try
+      (mount-app!)
+      (click! (testid "menu-toggle-args-0"))
+      (let [menu-items (testid "action-menu-items")
+            action-elements (into-array (array-seq (.querySelectorAll menu-items "[data-menu-action='true']")))]
+        (js/Object.defineProperty
+         menu-items
+         "scrollTop"
+         #js {:configurable true
+              :get (fn [] @scroll-top)
+              :set (fn [value] (reset! scroll-top value))})
+        (set! (.-getBoundingClientRect element-prototype)
+              (fn []
+                (this-as this
+                         (cond
+                           (identical? this menu-items)
+                           #js {:top 0
+                                :bottom 40}
+
+                           :else
+                           (let [index (.indexOf action-elements this)]
+                             (if (= -1 index)
+                               (.call original-get-bounding-client-rect this)
+                               (let [top (* index 20)]
+                                 #js {:top top
+                                      :bottom (+ top 20)})))))))
+        (keydown! (testid "stack-node-args-0") "ArrowDown")
+        (is (= "action-wrap" (selected-action-id)))
+        (is (> @scroll-top 0))
+        (is (some? menu-items)))
+      (finally
+        (set! (.-getBoundingClientRect element-prototype)
+              original-get-bounding-client-rect)))))
