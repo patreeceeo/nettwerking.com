@@ -21,12 +21,6 @@
 (defn- text-content [selector]
   (some-> (query-one selector) .-textContent))
 
-(defn- style-value [selector property]
-  (some-> (query-one selector)
-          js/getComputedStyle
-          (.getPropertyValue property)
-          string/trim))
-
 (defn- inject-style! [css-text]
   (let [style-element (.createElement js/document "style")]
     (set! (.-textContent style-element) css-text)
@@ -256,24 +250,39 @@
   (is (not (string/includes? (.-className (.-body js/document)) "menu-open"))))
 
 (deftest selected-menu-action-scrolls-into-view-with-context
-  (let [scroll-calls (atom 0)
-        element-prototype (.-prototype js/Element)
-        original-scroll-into-view (.-scrollIntoView element-prototype)
-        style-element (inject-style! "[data-testid='action-menu-items'] { height: 1.5rem !important; max-height: 1.5rem !important; }")]
+  (let [element-prototype (.-prototype js/Element)
+        original-get-bounding-client-rect (.-getBoundingClientRect element-prototype)
+        scroll-top (atom 0)]
     (try
-      (set! (.-scrollIntoView element-prototype)
-            (fn [& _args]
-              (swap! scroll-calls inc)))
       (mount-app!)
       (click! (testid "menu-toggle-args-1"))
-      (reset! scroll-calls 0)
-      (let [menu-items (testid "action-menu-items")]
+      (let [menu-items (testid "action-menu-items")
+            action-elements (into-array (array-seq (.querySelectorAll menu-items "[data-menu-action='true']")))]
+        (js/Object.defineProperty
+         menu-items
+         "scrollTop"
+         #js {:configurable true
+              :get (fn [] @scroll-top)
+              :set (fn [value] (reset! scroll-top value))})
+        (set! (.-getBoundingClientRect element-prototype)
+              (fn []
+                (this-as this
+                         (cond
+                           (identical? this menu-items)
+                           #js {:top 0
+                                :bottom 40}
+
+                           :else
+                           (let [index (.indexOf action-elements this)]
+                             (if (= -1 index)
+                               (.call original-get-bounding-client-rect this)
+                               (let [top (* index 20)]
+                                 #js {:top top
+                                      :bottom (+ top 20)})))))))
         (keydown! (testid "stack-node-args-1") "ArrowDown")
-        (keydown! (testid "stack-node-args-1") "ArrowDown")
-        (keydown! (testid "stack-node-args-1") "ArrowDown")
-        (is (= "action-insert-symbol-wat" (selected-action-id)))
-        (is (> @scroll-calls 0))
+        (is (= "action-insert-literal-4" (selected-action-id)))
+        (is (> @scroll-top 0))
         (is (some? menu-items)))
       (finally
-        (set! (.-scrollIntoView element-prototype) original-scroll-into-view)
-        (.remove style-element)))))
+        (set! (.-getBoundingClientRect element-prototype)
+              original-get-bounding-client-rect)))))

@@ -164,7 +164,6 @@
       (sync-menu-presentation! instance)
       (sync-selected-menu-action-visibility! instance)
       (schedule-selected-menu-action-visibility! instance)
-      (r/flush)
       (when persist?
         (schedule-persist! instance)))))
 
@@ -196,8 +195,6 @@
   (when (get-in @(:state instance) [:menu :open?])
     (when-let [container (.querySelector (:container instance) "[data-testid='action-menu-items']")]
       (when-let [selected (.querySelector container "[data-action-selected='true']")]
-        (.scrollIntoView selected #js {:block "nearest"
-                                       :inline "nearest"})
         (let [previous (.-previousElementSibling selected)
               next (.-nextElementSibling selected)
               container-rect (.getBoundingClientRect container)
