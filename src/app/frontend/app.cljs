@@ -428,7 +428,7 @@
                 :data-selected (if selected? "true" "false")
                 :aria-label aria-label
                 :on-click on-click}
-       [node-token-view node]]))
+       [node-token-view node]])))
 
 (defn- menu-toggle-view [instance path selected?]
   [:button {:type "button"
