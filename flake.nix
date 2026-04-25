@@ -101,7 +101,7 @@
           # Allow network access for this specific derivation
           outputHashMode = "recursive";
           outputHashAlgo = "sha256";
-          outputHash = "sha256-bNTpjnn5CjFj10Fyfbt2a2RP2Qj3o2Z8zhCpWR99WuQ=";
+          outputHash = "sha256-on7xyAriMdAYpjMtrH/5EJKrtAsKNxxgID9LQtdwlAo=";
         };
 
         default = clj-nix.lib.mkCljApp {
