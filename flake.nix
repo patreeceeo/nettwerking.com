@@ -73,31 +73,61 @@
           };
       };
       packages.${system} = rec {
+        frontend-deps = pkgs.stdenvNoCC.mkDerivation {
+          name = "ted-frontend-deps";
+          src = ./.;
+
+          nativeBuildInputs = [ pkgs.nodejs_20 pkgs.cacert ];
+
+          buildPhase = ''
+            mkdir -p $out
+            cp package.json $out/
+
+            # Set SSL certificates for npm
+            export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+            export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+
+            # Install npm dependencies with fixed output
+            HOME=$TMPDIR npm install --legacy-peer-deps
+
+            # Copy node_modules to output
+            cp -r node_modules $out/
+          '';
+
+          installPhase = ''
+            # Output is already set in buildPhase
+          '';
+
+          # Allow network access for this specific derivation
+          outputHashMode = "recursive";
+          outputHashAlgo = "sha256";
+          outputHash = "sha256-bNTpjnn5CjFj10Fyfbt2a2RP2Qj3o2Z8zhCpWR99WuQ=";
+        };
+
         default = clj-nix.lib.mkCljApp {
           pkgs = nixpkgs.legacyPackages.${system};
-          modules = [ # Option list: https://jlesquembre.github.io/clj-nix/options/
+          modules = [
             {
               projectSrc = ./.;
               name = "ted";
               main-ns = "app.backend.main";
               jdk = pkgs.jdk25_headless;
               buildCommand = ''
+                # Create resources directory
                 mkdir -p resources/public/js
 
-                # Add nodejs to PATH for npm
-                export PATH="${pkgs.nodejs_20}/bin:$PATH"
+                # Use pre-built npm dependencies
+                ln -sf ${frontend-deps}/node_modules ./node_modules
 
-                # Install npm dependencies for React
-                npm install
-
+                # Build frontend with shadow-cljs
                 clojure -M:frontend compile app
 
+                # Build backend uberjar
                 clj-builder uber "ted/ted" "DEV" "app.backend.main" \
                   'null' \
                   'null' \
                   'null'
               '';
-
             }
           ];
         };
